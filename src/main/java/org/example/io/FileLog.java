@@ -1,4 +1,4 @@
-package org.example;
+package org.example.io;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -10,27 +10,25 @@ import java.time.format.DateTimeFormatter;
 
 public class FileLog implements AutoCloseable {
 
-    private static final DateTimeFormatter TS_FILE = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
-    private static final DateTimeFormatter TS_LINE = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
+    private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
+    private static final DateTimeFormatter LINE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
     private static final Path LOG_DIR = Path.of("logs");
 
     private final BufferedWriter writer;
-    private final Path path;
 
-    public FileLog(LocalDateTime now, String label) {
+    public FileLog(LocalDateTime timestamp, String label) {
         try {
             Files.createDirectories(LOG_DIR);
-            String filename = now.format(TS_FILE) + "_" + label + ".log";
-            path = LOG_DIR.resolve(filename);
-            writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE_NEW);
+            String filename = timestamp.format(FILE_TIMESTAMP) + "_" + label + ".log";
+            writer = Files.newBufferedWriter(LOG_DIR.resolve(filename), StandardOpenOption.CREATE_NEW);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create FileLog", e);
+            throw new RuntimeException("Failed to create log file", e);
         }
     }
 
     public void write(String message) {
         try {
-            writer.write(LocalDateTime.now().format(TS_LINE) + " " + message);
+            writer.write(LocalDateTime.now().format(LINE_TIMESTAMP) + " " + message);
             writer.newLine();
             writer.flush();
         } catch (IOException e) {

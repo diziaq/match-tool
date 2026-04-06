@@ -1,15 +1,18 @@
 package org.example;
 
-import org.junit.jupiter.api.Test;
+import org.example.wifi.Network;
+import org.example.wifi.scan.NetworkOutputParser;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class WiFiParserTest {
+class NetworkOutputParserTest {
 
     @Nested
-    class MacParsingTests {
+    class MacOsParsingTests {
 
         @Test
         void parsesStandardOutput() {
@@ -18,7 +21,7 @@ class WiFiParserTest {
                     CoffeeShop|-67
                     Office5G|-32
                     """;
-            List<WiFiNetwork> result = WiFiParser.parseMacOutput(output);
+            List<Network> result = NetworkOutputParser.parseMacOs(output);
 
             assertEquals(3, result.size());
             assertEquals("HomeWiFi", result.get(0).ssid());
@@ -32,7 +35,7 @@ class WiFiParserTest {
                     |-80
                     AnotherOne|-60
                     """;
-            List<WiFiNetwork> result = WiFiParser.parseMacOutput(output);
+            List<Network> result = NetworkOutputParser.parseMacOs(output);
 
             assertEquals(2, result.size());
             assertEquals("RealNetwork", result.get(0).ssid());
@@ -41,8 +44,7 @@ class WiFiParserTest {
 
         @Test
         void handlesEmptyOutput() {
-            List<WiFiNetwork> result = WiFiParser.parseMacOutput("");
-            assertTrue(result.isEmpty());
+            assertTrue(NetworkOutputParser.parseMacOs("").isEmpty());
         }
 
         @Test
@@ -53,7 +55,7 @@ class WiFiParserTest {
                     GoodNetwork|-55
                     another bad line
                     """;
-            List<WiFiNetwork> result = WiFiParser.parseMacOutput(output);
+            List<Network> result = NetworkOutputParser.parseMacOs(output);
 
             assertEquals(1, result.size());
             assertEquals("GoodNetwork", result.get(0).ssid());
@@ -70,7 +72,7 @@ class WiFiParserTest {
                     Neighbor:42
                     Office:91
                     """;
-            List<WiFiNetwork> result = WiFiParser.parseLinuxOutput(output);
+            List<Network> result = NetworkOutputParser.parseLinux(output);
 
             assertEquals(3, result.size());
             assertEquals("MyRouter", result.get(0).ssid());
@@ -84,28 +86,28 @@ class WiFiParserTest {
                     :50
                     AlsoGood:70
                     """;
-            List<WiFiNetwork> result = WiFiParser.parseLinuxOutput(output);
+            List<Network> result = NetworkOutputParser.parseLinux(output);
 
             assertEquals(2, result.size());
         }
 
         @Test
         void handlesEmptyOutput() {
-            assertTrue(WiFiParser.parseLinuxOutput("").isEmpty());
+            assertTrue(NetworkOutputParser.parseLinux("").isEmpty());
         }
     }
 
     @Nested
-    class DedupAndSortTests {
+    class DeduplicationTests {
 
         @Test
         void sortsByNameCaseInsensitive() {
             var nets = List.of(
-                new WiFiNetwork("Zebra", "-30 dBm"),
-                new WiFiNetwork("alpha", "-50 dBm"),
-                new WiFiNetwork("Beta", "-40 dBm")
+                new Network("Zebra", "-30 dBm"),
+                new Network("alpha", "-50 dBm"),
+                new Network("Beta", "-40 dBm")
             );
-            List<WiFiNetwork> result = WiFiParser.dedupAndSort(nets);
+            List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertEquals("alpha", result.get(0).ssid());
             assertEquals("Beta", result.get(1).ssid());
@@ -115,11 +117,11 @@ class WiFiParserTest {
         @Test
         void deduplicatesKeepingStrongestSignal() {
             var nets = List.of(
-                new WiFiNetwork("Office", "-67 dBm"),
-                new WiFiNetwork("Office", "-34 dBm"),
-                new WiFiNetwork("Office", "-50 dBm")
+                new Network("Office", "-67 dBm"),
+                new Network("Office", "-34 dBm"),
+                new Network("Office", "-50 dBm")
             );
-            List<WiFiNetwork> result = WiFiParser.dedupAndSort(nets);
+            List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertEquals(1, result.size());
             assertEquals("-34 dBm", result.get(0).signal());
@@ -128,17 +130,17 @@ class WiFiParserTest {
         @Test
         void deduplicatesCaseInsensitive() {
             var nets = List.of(
-                new WiFiNetwork("office", "-60 dBm"),
-                new WiFiNetwork("Office", "-40 dBm")
+                new Network("office", "-60 dBm"),
+                new Network("Office", "-40 dBm")
             );
-            List<WiFiNetwork> result = WiFiParser.dedupAndSort(nets);
+            List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertEquals(1, result.size());
         }
 
         @Test
         void handlesEmptyList() {
-            assertTrue(WiFiParser.dedupAndSort(List.of()).isEmpty());
+            assertTrue(NetworkOutputParser.deduplicated(List.of()).isEmpty());
         }
     }
 }
