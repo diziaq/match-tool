@@ -30,24 +30,28 @@ class ArgsParserTest {
 
         @Test
         void parsesPathParam() throws Exception {
+            Path file = tempDir.resolve("something.txt");
+            Files.writeString(file, "data");
             var parser = new ArgsParser(Map.of("dir", ParamSpec.of(ParamType.PATH)));
 
-            ParsedArgs result = parser.parse(new String[]{"--dir", "/tmp/something"});
+            ParsedArgs result = parser.parse(new String[]{"--dir", file.toString()});
 
-            assertEquals(Path.of("/tmp/something"), (Path) result.get("dir"));
+            assertEquals(file, (Path) result.get("dir"));
         }
 
         @Test
         void parsesMultipleParams() throws Exception {
+            Path file = tempDir.resolve("x.txt");
+            Files.writeString(file, "data");
             var parser = new ArgsParser(Map.of(
                 "count", ParamSpec.of(ParamType.INTEGER),
                 "input", ParamSpec.of(ParamType.PATH)
             ));
 
-            ParsedArgs result = parser.parse(new String[]{"--count", "5", "--input", "/tmp/x"});
+            ParsedArgs result = parser.parse(new String[]{"--count", "5", "--input", file.toString()});
 
             assertEquals(5, (Integer) result.get("count"));
-            assertEquals(Path.of("/tmp/x"), (Path) result.get("input"));
+            assertEquals(file, (Path) result.get("input"));
         }
 
         @Test
@@ -152,15 +156,12 @@ class ArgsParserTest {
             Path missing = dir.resolve("nonexistent.csv");
 
             var parser = new ArgsParser(Map.of(
-                "input", ParamSpec.of(ParamType.PATH)
-                                  .required()
-                                  .validatedBy(ParamSpec.existingNonEmptyFile(), "must be an existing non-empty file")
+                "input", ParamSpec.of(ParamType.PATH).required()
             ));
 
             var ex = assertThrows(ArgsParseException.class,
                 () -> parser.parse(new String[]{"--input", missing.toString()}));
             assertTrue(ex.getMessage().contains("--input"));
-            assertTrue(ex.getMessage().contains("must be an existing non-empty file"));
         }
 
         @Test

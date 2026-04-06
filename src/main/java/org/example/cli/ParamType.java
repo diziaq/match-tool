@@ -13,14 +13,8 @@ import java.util.function.Function;
  */
 public final class ParamType<T> {
 
-    public static final ParamType<Path>    PATH    = new ParamType<>("Path", Path::of);
-    public static final ParamType<Integer> INTEGER = new ParamType<>("Integer", raw -> {
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("'" + raw + "' is not a valid integer");
-        }
-    });
+    public static final ParamType<Path>    PATH    = new ParamType<>("Path", new PathParser());
+    public static final ParamType<Integer> INTEGER = new ParamType<>("Integer", new IntegerParser());
 
     private final String name;
     private final Function<String, T> converter;
