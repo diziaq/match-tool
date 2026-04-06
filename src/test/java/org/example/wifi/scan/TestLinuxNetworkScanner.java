@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
-class LinuxNetworkScannerTest {
+class TestLinuxNetworkScanner {
 
     @Test
     void scan_parsesShellOutputIntoNetworks() throws Exception {
@@ -15,9 +15,9 @@ class LinuxNetworkScannerTest {
 
         List<Network> result = scanner.scan();
 
-        assertEquals(2, result.size());
-        assertEquals("HomeWiFi", result.get(0).ssid());
-        assertEquals("75%", result.get(0).signal());
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).ssid()).isEqualTo("HomeWiFi");
+        assertThat(result.get(0).signal()).isEqualTo("75%");
     }
 
     @Test
@@ -27,8 +27,7 @@ class LinuxNetworkScannerTest {
 
         scanner.scan();
 
-        assertTrue(capturedCmd[0].contains("nmcli"));
-        assertTrue(capturedCmd[0].contains("SSID,SIGNAL"));
+        assertThat(capturedCmd[0]).contains("nmcli").contains("SSID,SIGNAL");
     }
 
     @Test
@@ -37,15 +36,15 @@ class LinuxNetworkScannerTest {
 
         List<Network> result = scanner.scan();
 
-        assertEquals(1, result.size());
-        assertEquals("80%", result.get(0).signal());
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).signal()).isEqualTo("80%");
     }
 
     @Test
     void scan_returnsEmptyListForBlankOutput() throws Exception {
         var scanner = new LinuxNetworkScanner(cmd -> "");
 
-        assertTrue(scanner.scan().isEmpty());
+        assertThat(scanner.scan()).isEmpty();
     }
 
     @Test
@@ -54,8 +53,7 @@ class LinuxNetworkScannerTest {
 
         List<Network> result = scanner.scan();
 
-        assertEquals("alpha", result.get(0).ssid());
-        assertEquals("Beta",  result.get(1).ssid());
-        assertEquals("Zebra", result.get(2).ssid());
+        assertThat(result).extracting(Network::ssid)
+            .containsExactly("alpha", "Beta", "Zebra");
     }
 }

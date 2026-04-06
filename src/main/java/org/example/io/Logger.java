@@ -2,6 +2,7 @@ package org.example.io;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -20,26 +21,25 @@ public class Logger implements AutoCloseable {
 
     public Logger(Output output, boolean debugEnabled) {
         if (output == Output.FILE || output == Output.BOTH) {
-            throw new IllegalArgumentException("File path required for output mode: " + output);
+            throw new IllegalArgumentException("File name required for output mode: " + output);
         }
         this.output = output;
         this.debugEnabled = debugEnabled;
         this.fileWriter = null;
     }
 
-    public Logger(Output output, boolean debugEnabled, Path filePath) {
+    /** Creates a file-backed logger; {@code fileName} is resolved relative to the directory containing the application jar. */
+    public Logger(Output output, boolean debugEnabled, String fileName) {
         this.output = output;
         this.debugEnabled = debugEnabled;
-        if (output == Output.FILE || output == Output.BOTH) {
-            try {
-                if (filePath.getParent() != null) Files.createDirectories(filePath.getParent());
-                this.fileWriter = Files.newBufferedWriter(filePath, StandardOpenOption.CREATE_NEW);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to open log file: " + filePath, e);
-            }
-        } else {
-            this.fileWriter = null;
-        }
+        this.fileWriter = openWriter(jarDir().resolve(fileName));
+    }
+
+    /** Package-private: used by tests to write to an explicit path. */
+    Logger(Output output, boolean debugEnabled, Path filePath) {
+        this.output = output;
+        this.debugEnabled = debugEnabled;
+        this.fileWriter = openWriter(filePath);
     }
 
     public void info(String message) {
@@ -86,5 +86,23 @@ public class Logger implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (fileWriter != null) fileWriter.close();
+    }
+
+    private static Path jarDir() {
+        try {
+            Path jar = Path.of(Logger.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            return jar.getParent();
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException("Cannot determine jar location", e);
+        }
+    }
+
+    private static BufferedWriter openWriter(Path filePath) {
+        try {
+            if (filePath.getParent() != null) Files.createDirectories(filePath.getParent());
+            return Files.newBufferedWriter(filePath, StandardOpenOption.CREATE_NEW);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to open log file: " + filePath, e);
+        }
     }
 }

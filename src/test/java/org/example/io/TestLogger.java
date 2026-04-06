@@ -7,14 +7,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
-class LoggerTest {
+class TestLogger {
 
     private final PrintStream originalOut = System.out;
     private final PrintStream originalErr = System.err;
@@ -42,45 +43,44 @@ class LoggerTest {
         void info_writesToStdout() {
             new Logger(Logger.Output.CONSOLE, false).info("hello");
 
-            assertTrue(capturedOut.toString().contains("hello"));
-            assertTrue(capturedErr.toString().isEmpty());
+            assertThat(capturedOut.toString()).contains("hello");
+            assertThat(capturedErr.toString()).isEmpty();
         }
 
         @Test
         void debug_writesToStdoutWhenEnabled() {
             new Logger(Logger.Output.CONSOLE, true).debug("detail");
 
-            assertTrue(capturedOut.toString().contains("[DEBUG]"));
-            assertTrue(capturedOut.toString().contains("detail"));
+            assertThat(capturedOut.toString()).contains("[DEBUG]").contains("detail");
         }
 
         @Test
         void debug_suppressedWhenDisabled() {
             new Logger(Logger.Output.CONSOLE, false).debug("hidden");
 
-            assertTrue(capturedOut.toString().isEmpty());
+            assertThat(capturedOut.toString()).isEmpty();
         }
 
         @Test
         void error_writesToStderr() {
             new Logger(Logger.Output.CONSOLE, false).error("boom");
 
-            assertTrue(capturedErr.toString().contains("boom"));
-            assertTrue(capturedOut.toString().isEmpty());
+            assertThat(capturedErr.toString()).contains("boom");
+            assertThat(capturedOut.toString()).isEmpty();
         }
 
         @Test
         void print_writesWithoutNewline() {
             new Logger(Logger.Output.CONSOLE, false).print("Enter: ");
 
-            assertEquals("Enter: ", capturedOut.toString());
+            assertThat(capturedOut.toString()).isEqualTo("Enter: ");
         }
 
         @Test
         void info_doesNotWriteToStderr() {
             new Logger(Logger.Output.CONSOLE, false).info("msg");
 
-            assertTrue(capturedErr.toString().isEmpty());
+            assertThat(capturedErr.toString()).isEmpty();
         }
     }
 
@@ -97,8 +97,8 @@ class LoggerTest {
             }
 
             String content = Files.readString(logFile);
-            assertTrue(content.contains("file-message"));
-            assertTrue(content.matches(".*\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}.*"));
+            assertThat(content).contains("file-message");
+            assertThat(content).matches("(?s).*\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}.*");
         }
 
         @Test
@@ -108,7 +108,7 @@ class LoggerTest {
                 logger.info("silent");
             }
 
-            assertTrue(capturedOut.toString().isEmpty());
+            assertThat(capturedOut.toString()).isEmpty();
         }
 
         @Test
@@ -118,8 +118,8 @@ class LoggerTest {
                 logger.debug("trace-detail");
             }
 
-            assertTrue(Files.readString(logFile).contains("[DEBUG]"));
-            assertTrue(Files.readString(logFile).contains("trace-detail"));
+            String content = Files.readString(logFile);
+            assertThat(content).contains("[DEBUG]").contains("trace-detail");
         }
 
         @Test
@@ -129,7 +129,7 @@ class LoggerTest {
                 logger.debug("hidden");
             }
 
-            assertEquals("", Files.readString(logFile));
+            assertThat(Files.readString(logFile)).isEmpty();
         }
 
         @Test
@@ -141,9 +141,9 @@ class LoggerTest {
             }
 
             List<String> lines = Files.readAllLines(logFile);
-            assertEquals(2, lines.size());
-            assertTrue(lines.get(0).contains("line-one"));
-            assertTrue(lines.get(1).contains("line-two"));
+            assertThat(lines).hasSize(2);
+            assertThat(lines.get(0)).contains("line-one");
+            assertThat(lines.get(1)).contains("line-two");
         }
 
         @Test
@@ -153,7 +153,7 @@ class LoggerTest {
                 logger.info("deep");
             }
 
-            assertTrue(Files.exists(logFile));
+            assertThat(logFile).exists();
         }
     }
 
@@ -169,8 +169,8 @@ class LoggerTest {
                 logger.info("dual");
             }
 
-            assertTrue(capturedOut.toString().contains("dual"));
-            assertTrue(Files.readString(logFile).contains("dual"));
+            assertThat(capturedOut.toString()).contains("dual");
+            assertThat(Files.readString(logFile)).contains("dual");
         }
 
         @Test
@@ -180,9 +180,8 @@ class LoggerTest {
                 logger.error("failure");
             }
 
-            assertTrue(capturedErr.toString().contains("failure"));
-            assertTrue(Files.readString(logFile).contains("[ERROR]"));
-            assertTrue(Files.readString(logFile).contains("failure"));
+            assertThat(capturedErr.toString()).contains("failure");
+            assertThat(Files.readString(logFile)).contains("[ERROR]").contains("failure");
         }
     }
 
@@ -191,19 +190,20 @@ class LoggerTest {
 
         @Test
         void throwsWhenFileOutputRequestedWithoutPath() {
-            assertThrows(IllegalArgumentException.class,
-                () -> new Logger(Logger.Output.FILE, false));
+            assertThatThrownBy(() -> new Logger(Logger.Output.FILE, false))
+                .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         void throwsWhenBothOutputRequestedWithoutPath() {
-            assertThrows(IllegalArgumentException.class,
-                () -> new Logger(Logger.Output.BOTH, false));
+            assertThatThrownBy(() -> new Logger(Logger.Output.BOTH, false))
+                .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         void consoleConstructor_doesNotThrow() {
-            assertDoesNotThrow(() -> new Logger(Logger.Output.CONSOLE, true));
+            assertThatCode(() -> new Logger(Logger.Output.CONSOLE, true))
+                .doesNotThrowAnyException();
         }
     }
 }

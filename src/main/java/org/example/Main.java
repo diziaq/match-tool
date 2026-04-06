@@ -1,51 +1,62 @@
 package org.example;
 
-import org.example.io.CsvReader;
-import org.example.io.Logger;
-import org.example.matcher.PairMatcher;
-import org.example.shell.ShellRunner;
-import org.example.shell.SystemShellRunner;
-import org.example.wifi.Network;
-import org.example.wifi.connect.ShellNetworkConnector;
-import org.example.wifi.scan.NetworkScanner;
-import org.example.wifi.scan.NetworkScannerFactory;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Scanner;
-import java.util.stream.Stream;
+import org.example.cli.ArgsParser;
+import org.example.cli.ParsedArgs;
+import org.example.io.Logger;
+import org.example.matcher.PairMatcher;
+import org.example.shell.ShellRunner;
+import org.example.shell.SystemShellRunner;
+import org.example.wifi.Network;
+import org.example.wifi.connect.ConnectOutcome;
+import org.example.wifi.connect.NetworkConnector;
+import org.example.wifi.scan.NetworkScanner;
 
 public class Main {
 
-    private static final boolean DEBUG = true;
     private static final DateTimeFormatter LOG_FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
 
     public static void main(String[] args) throws Exception {
-        Logger logger = new Logger(Logger.Output.CONSOLE, DEBUG);
+        ParsedArgs cli;
+        try {
+            cli = new ArgsParser()
+                      .registerRequired("mode", Integer.class, raw -> {
+                          int m = Integer.parseInt(raw);
+                          if (m < 1 || m > 4) throw new IllegalArgumentException("must be 1..3");
+                          return m;
+                      })
+                      .registerOptional("left", Path.class, ArgsParser.PATH, null)
+                      .registerOptional("right", Path.class, ArgsParser.PATH, null)
+                      .registerOptional("skip", Integer.class, ArgsParser.INTEGER, 0)
+                      .registerOptional("debug", Boolean.class, Boolean::parseBoolean, false)
+                      .parse(args);
+        } catch (ArgsParser.ParseException e) {
+            System.err.println("Usage error:\n" + e.getMessage());
+            System.exit(1);
+            return;
+        }
 
-        boolean isMac = System.getProperty("os.name", "").toLowerCase().contains("mac");
-        logger.debug("OS: " + System.getProperty("os.name") + " (isMac=" + isMac + ")");
+        int mode = cli.get("mode");
+        Path left = cli.get("left");
+        Path right = cli.get("right");
+        int skip = cli.get("skip");
+        boolean debug = cli.get("debug");
+
+        Logger logger = new Logger(Logger.Output.CONSOLE, debug);
+
+        Platform platform = Platform.detect();
+        logger.debug("Platform: " + platform);
 
         ShellRunner shell = new SystemShellRunner(logger);
-        NetworkScanner scanner = NetworkScannerFactory.forCurrentOs(shell);
-        ShellNetworkConnector connector = new ShellNetworkConnector(shell, isMac, logger);
+        NetworkScanner scanner = platform.newScanner(shell);
+        NetworkConnector connector = platform.newConnector(shell, logger);
 
-        Scanner input = new Scanner(System.in);
-        logger.info("=== WiFi Manager (" + (isMac ? "macOS" : "Linux") + ") ===");
-        logger.info("1. List available WiFi networks");
-        logger.info("2. Connect to a WiFi network");
-        logger.info("3. Try passwords for a WiFi network");
-        logger.info("4. Try passwords for all WiFi networks");
-        logger.print("Choice: ");
-        int choice = input.nextInt();
-        input.nextLine();
-        logger.debug("User chose: " + choice);
-
-        switch (choice) {
+        switch (mode) {
             case 1 -> {
                 logger.info("Scanning...");
                 List<Network> networks = scanner.scan();
@@ -54,48 +65,34 @@ public class Main {
                 networks.forEach(n -> logger.info(String.format("  %-30s %s", n.ssid(), n.signal())));
             }
             case 2 -> {
+                Scanner input = new Scanner(System.in);
                 logger.print("SSID: ");
                 String ssid = input.nextLine();
                 logger.print("Password: ");
                 String password = input.nextLine();
-                logger.info(connector.connect(ssid, password));
+                String message = switch (connector.tryConnect(ssid, password)) {
+                    case ConnectOutcome.Connected()         -> "Connected to: " + ssid;
+                    case ConnectOutcome.NetworkNotFound()   -> "Network not found: " + ssid;
+                    case ConnectOutcome.WrongPassword()     -> "Wrong password for: " + ssid;
+                    case ConnectOutcome.AssociationFailed() -> "Association failed for: " + ssid;
+                    case ConnectOutcome.UnknownFailure(var out) -> out;
+                };
+                logger.info(message);
             }
             case 3 -> {
-                logger.print("SSID: ");
-                String ssid = input.nextLine();
-                logger.info("Enter passwords to try (enter '0' to stop):");
-                while (true) {
-                    logger.print("Password: ");
-                    String password = input.nextLine();
-                    if ("0".equals(password)) { logger.info("Stopped."); break; }
-                    boolean ok = connector.tryConnect(ssid, password);
-                    logger.info(ok ? "SUCCESS - connected to " + ssid : "ERROR - wrong password or connection failed");
-                    if (ok) break;
-                }
-            }
-            case 4 -> {
-                List<Network> networks = scanner.scan();
-                List<String> allowedNetworks = resourceLines("/networks.txt").toList();
-                List<String> targetNetworks = networks.stream()
-                    .map(Network::ssid).distinct()
-                    .filter(allowedNetworks::contains)
-                    .toList();
-
-                int skipPasswords = 0;
-                logger.debug("Skipping first " + skipPasswords + " passwords");
-                logger.debug("Trying networks: " + targetNetworks);
-
+                requireFile(left, "left", logger);
+                requireFile(right, "right", logger);
+                List<String> lefts = Files.readAllLines(left);
                 String prefix = LocalDateTime.now().format(LOG_FILE_TIMESTAMP);
-                try (var traceLog   = new Logger(Logger.Output.FILE, false, Path.of("logs", prefix + "_trace.log"));
-                     var successLog = new Logger(Logger.Output.FILE, false, Path.of("logs", prefix + "_success.log"))) {
-
+                try (var traceLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_trace.log");
+                     var successLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_success.log")) {
                     new PairMatcher<String, String>().match(
-                        targetNetworks,
-                        CsvReader.column("/passwords_num.csv", 0, s -> s.length() > 7).skip(skipPasswords),
+                        lefts,
+                        Files.lines(right).skip(skip),
                         (ssid, password) -> {
-                            boolean result = connector.tryConnect(ssid, password);
-                            traceLog.info("%s: %s @ %s".formatted(result, password, ssid));
-                            return result;
+                            ConnectOutcome outcome = connector.tryConnect(ssid, password);
+                            traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password, ssid));
+                            return outcome instanceof ConnectOutcome.Connected;
                         },
                         match -> {
                             successLog.info("TRUE: %s @ %s".formatted(match.right(), match.left()));
@@ -107,9 +104,10 @@ public class Main {
         }
     }
 
-    private static Stream<String> resourceLines(String path) {
-        var in = Main.class.getResourceAsStream(path);
-        if (in == null) throw new IllegalArgumentException("Resource not found: " + path);
-        return new BufferedReader(new InputStreamReader(in)).lines();
+    private static void requireFile(Path path, String argName, Logger logger) {
+        if (path == null) {
+            logger.error("--" + argName + " is required for this mode");
+            System.exit(1);
+        }
     }
 }

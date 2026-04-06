@@ -5,31 +5,31 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
-class NetworkTest {
+class TestNetwork {
 
     @Test
     void getters() {
         var net = new Network("HomeWiFi", "-45 dBm");
 
-        assertEquals("HomeWiFi", net.ssid());
-        assertEquals("-45 dBm", net.signal());
+        assertThat(net.ssid()).isEqualTo("HomeWiFi");
+        assertThat(net.signal()).isEqualTo("-45 dBm");
     }
 
     @Test
     void equalityByValue() {
-        assertEquals(new Network("A", "-50 dBm"), new Network("A", "-50 dBm"));
+        assertThat(new Network("A", "-50 dBm")).isEqualTo(new Network("A", "-50 dBm"));
     }
 
     @Test
     void inequalityWhenSsidDiffers() {
-        assertNotEquals(new Network("A", "-50 dBm"), new Network("B", "-50 dBm"));
+        assertThat(new Network("A", "-50 dBm")).isNotEqualTo(new Network("B", "-50 dBm"));
     }
 
     @Test
     void inequalityWhenSignalDiffers() {
-        assertNotEquals(new Network("A", "-50 dBm"), new Network("A", "-60 dBm"));
+        assertThat(new Network("A", "-50 dBm")).isNotEqualTo(new Network("A", "-60 dBm"));
     }
 
     @Test
@@ -37,7 +37,7 @@ class NetworkTest {
         var a = new Network("apple", "-50 dBm");
         var b = new Network("Apple", "-40 dBm");
 
-        assertEquals(0, a.compareTo(b));
+        assertThat(a.compareTo(b)).isZero();
     }
 
     @Test
@@ -46,9 +46,9 @@ class NetworkTest {
         var beta  = new Network("Beta",  "-40 dBm");
         var zebra = new Network("Zebra", "-30 dBm");
 
-        assertTrue(alpha.compareTo(beta) < 0);
-        assertTrue(beta.compareTo(zebra) < 0);
-        assertTrue(zebra.compareTo(alpha) > 0);
+        assertThat(alpha.compareTo(beta)).isNegative();
+        assertThat(beta.compareTo(zebra)).isNegative();
+        assertThat(zebra.compareTo(alpha)).isPositive();
     }
 
     @Test
@@ -60,8 +60,7 @@ class NetworkTest {
         ));
         nets.sort(null);
 
-        assertEquals("alpha", nets.get(0).ssid());
-        assertEquals("Beta",  nets.get(1).ssid());
-        assertEquals("Zebra", nets.get(2).ssid());
+        assertThat(nets).extracting(Network::ssid)
+            .containsExactly("alpha", "Beta", "Zebra");
     }
 }

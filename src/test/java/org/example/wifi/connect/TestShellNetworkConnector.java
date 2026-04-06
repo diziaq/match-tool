@@ -1,0 +1,183 @@
+package org.example.wifi.connect;
+
+import org.example.Platform;
+import org.example.io.Logger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+
+import static org.assertj.core.api.Assertions.*;
+
+class TestShellNetworkConnector {
+
+    private final PrintStream originalOut = System.out;
+    private final PrintStream originalErr = System.err;
+
+    @BeforeEach
+    void suppressOutput() {
+        System.setOut(new PrintStream(new ByteArrayOutputStream()));
+        System.setErr(new PrintStream(new ByteArrayOutputStream()));
+    }
+
+    @AfterEach
+    void restoreOutput() {
+        System.setOut(originalOut);
+        System.setErr(originalErr);
+    }
+
+    private Logger silentLogger() {
+        return new Logger(Logger.Output.CONSOLE, false);
+    }
+
+    @Nested
+    class MacBehaviour {
+
+        @Test
+        void returnsConnectedWhenOutputBlank() {
+            var connector = new ShellNetworkConnector(cmd -> "", Platform.MACOS, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "secret"))
+                .isInstanceOf(ConnectOutcome.Connected.class);
+        }
+
+        @Test
+        void returnsNetworkNotFoundWhenCouldNotFind() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "Could not find network HomeWiFi.",
+                Platform.MACOS, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "pass"))
+                .isInstanceOf(ConnectOutcome.NetworkNotFound.class);
+        }
+
+        @Test
+        void returnsWrongPasswordForTmpErrOutput() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "Failed to join network HomeWiFi.\nError: -3925  The operation couldn't be completed. tmpErr",
+                Platform.MACOS, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "wrong"))
+                .isInstanceOf(ConnectOutcome.WrongPassword.class);
+        }
+
+        @Test
+        void returnsAssociationFailedForApple80211Error() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "Failed to join network HomeWiFi.\nError: -3912  The operation couldn't be completed. (com.apple.wifi.apple80211API.error error -3912.)",
+                Platform.MACOS, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "pass"))
+                .isInstanceOf(ConnectOutcome.AssociationFailed.class);
+        }
+
+        @Test
+        void returnsUnknownFailureForUnrecognizedOutput() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "some unexpected error",
+                Platform.MACOS, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "pass"))
+                .isInstanceOf(ConnectOutcome.UnknownFailure.class);
+        }
+
+        @Test
+        void tryConnect_usesNetworksetupCommand() {
+            String[] captured = new String[1];
+            var connector = new ShellNetworkConnector(
+                cmd -> { captured[0] = cmd; return ""; },
+                Platform.MACOS, silentLogger());
+
+            connector.tryConnect("MyNet", "pass");
+
+            assertThat(captured[0]).contains("networksetup").contains("-setairportnetwork");
+        }
+    }
+
+    @Nested
+    class LinuxBehaviour {
+
+        @Test
+        void returnsConnectedWhenOutputContainsSuccessfully() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "Device 'wlan0' successfully connected.",
+                Platform.LINUX, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "secret"))
+                .isInstanceOf(ConnectOutcome.Connected.class);
+        }
+
+        @Test
+        void returnsUnknownFailureWhenOutputLacksSuccessfully() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "Error: Connection failed.",
+                Platform.LINUX, silentLogger());
+
+            assertThat(connector.tryConnect("HomeWiFi", "wrong"))
+                .isInstanceOf(ConnectOutcome.UnknownFailure.class);
+        }
+
+        @Test
+        void returnsConnectedCaseInsensitiveForSuccessfully() {
+            var connector = new ShellNetworkConnector(
+                cmd -> "SUCCESSFULLY connected",
+                Platform.LINUX, silentLogger());
+
+            assertThat(connector.tryConnect("Net", "pass"))
+                .isInstanceOf(ConnectOutcome.Connected.class);
+        }
+
+        @Test
+        void tryConnect_usesNmcliCommand() {
+            String[] captured = new String[1];
+            var connector = new ShellNetworkConnector(
+                cmd -> { captured[0] = cmd; return ""; },
+                Platform.LINUX, silentLogger());
+
+            connector.tryConnect("MyNet", "pass");
+
+            assertThat(captured[0]).contains("nmcli").contains("password");
+        }
+    }
+
+    @Nested
+    class SharedBehaviour {
+
+        @Test
+        void returnsUnknownFailureOnException() {
+            var connector = new ShellNetworkConnector(
+                cmd -> { throw new RuntimeException("network down"); },
+                Platform.MACOS, silentLogger());
+
+            assertThat(connector.tryConnect("Net", "pass"))
+                .isInstanceOf(ConnectOutcome.UnknownFailure.class);
+        }
+
+        @Test
+        void ssidWithSingleQuote_isProperlyEscaped() {
+            String[] captured = new String[1];
+            var connector = new ShellNetworkConnector(
+                cmd -> { captured[0] = cmd; return ""; },
+                Platform.MACOS, silentLogger());
+
+            connector.tryConnect("O'Brien's WiFi", "pass");
+
+            assertThat(captured[0]).contains("O'\\''Brien");
+        }
+
+        @Test
+        void passwordWithSingleQuote_isProperlyEscaped() {
+            String[] captured = new String[1];
+            var connector = new ShellNetworkConnector(
+                cmd -> { captured[0] = cmd; return ""; },
+                Platform.MACOS, silentLogger());
+
+            connector.tryConnect("Net", "it's secret");
+
+            assertThat(captured[0]).contains("it'\\''s secret");
+        }
+    }
+}

@@ -1,100 +1,121 @@
 package org.example.cli;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
- * Parses and validates {@code --name value} style command-line arguments
- * against a fixed set of parameter specifications provided at construction.
+ * Builder-style parser for {@code --name value} command-line arguments.
  *
  * <pre>{@code
- * ArgsParser parser = new ArgsParser(Map.of(
- *     "input", ParamSpec.of(ParamType.PATH)
- *                       .required()
- *                       .validatedBy(ParamSpec.existingNonEmptyFile(), "must be an existing non-empty file"),
- *     "count", ParamSpec.of(ParamType.INTEGER)
- * ));
+ * ParsedArgs args = new ArgsParser()
+ *     .registerRequired("input", Path.class,    ArgsParser.PATH)
+ *     .registerOptional("count", Integer.class, ArgsParser.INTEGER, 10)
+ *     .parse(argv);
  *
- * ParsedArgs args = parser.parse(new String[]{"--input", "/data/file.csv", "--count", "10"});
- * Path input  = args.get("input");
- * Optional<Integer> count = args.getOptional("count");
+ * Path  input = args.get("input");
+ * int   count = args.get("count");
  * }</pre>
+ *
+ * All per-argument failures are collected and reported together in {@link ParseException}.
  */
 public final class ArgsParser {
 
-    private final Map<String, ParamSpec<?>> specs;
+    /** Parser for absolute/relative {@link Path} values; resolves relative paths against the jar directory and verifies existence. */
+    public static final Function<String, Path>    PATH    = new PathParser();
+    /** Parser for {@link Integer} values. */
+    public static final Function<String, Integer> INTEGER = new IntegerParser();
 
-    public ArgsParser(Map<String, ParamSpec<?>> specs) {
-        this.specs = Map.copyOf(specs);
+    /** Thrown when {@link #parse} encounters one or more errors; the message lists all failures. */
+    public static final class ParseException extends Exception {
+        ParseException(String message) {
+            super(message);
+        }
     }
 
-    public ParsedArgs parse(String[] args) throws ArgsParseException {
-        Map<String, String> raw = extractRawPairs(args);
-        checkForUnknown(raw);
-        checkForRequired(raw);
-        return new ParsedArgs(convertAll(raw));
+    private final Map<String, ArgDef<?>> defs = new LinkedHashMap<>();
+
+    /** Registers a mandatory parameter. {@link #parse} fails if it is absent or unparseable. */
+    public <T> ArgsParser registerRequired(String name, Class<T> type, Function<String, T> parse) {
+        defs.put(name, new ArgDef<>(name, type, parse, true, null));
+        return this;
     }
 
-    private Map<String, String> extractRawPairs(String[] args) throws ArgsParseException {
+    /** Registers an optional parameter. {@link #parse} returns {@code defaultValue} if it is absent. */
+    public <T> ArgsParser registerOptional(String name, Class<T> type, Function<String, T> parse, T defaultValue) {
+        defs.put(name, new ArgDef<>(name, type, parse, false, defaultValue));
+        return this;
+    }
+
+    /** Parses {@code args}, collecting all failures before throwing. */
+    public ParsedArgs parse(String[] args) throws ParseException {
+        List<String> errors = new ArrayList<>();
+
+        Map<String, String> raw = tokenize(args, errors);
+
+        for (String name : raw.keySet()) {
+            if (!defs.containsKey(name)) {
+                errors.add("--" + name + ": unknown parameter");
+            }
+        }
+
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (var entry : defs.entrySet()) {
+            String   name = entry.getKey();
+            ArgDef<?> def = entry.getValue();
+
+            if (raw.containsKey(name)) {
+                try {
+                    values.put(name, def.applyParse(raw.get(name)));
+                } catch (Exception e) {
+                    errors.add("--" + name + " (" + def.type().getSimpleName() + "): " + e.getMessage());
+                }
+            } else if (def.required()) {
+                errors.add("--" + name + ": required but not provided");
+            } else {
+                values.put(name, def.defaultValue());
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new ParseException(String.join("\n", errors));
+        }
+
+        return new ParsedArgs(values, defs.keySet());
+    }
+
+    private static Map<String, String> tokenize(String[] args, List<String> errors) {
         Map<String, String> raw = new LinkedHashMap<>();
         int i = 0;
         while (i < args.length) {
             String token = args[i];
             if (!token.startsWith("--")) {
-                throw new ArgsParseException("Expected --name, got: " + token);
+                errors.add("unexpected token: " + token);
+                i++;
+                continue;
             }
             String name = token.substring(2);
             if (name.isBlank()) {
-                throw new ArgsParseException("Empty parameter name after '--'");
+                errors.add("empty parameter name after '--'");
+                i++;
+                continue;
             }
             if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
-                throw new ArgsParseException("Missing value for --" + name);
+                errors.add("--" + name + ": missing value");
+                i++;
+                continue;
             }
             if (raw.containsKey(name)) {
-                throw new ArgsParseException("Duplicate parameter: --" + name);
+                errors.add("--" + name + ": duplicate parameter");
+                i += 2;
+                continue;
             }
             raw.put(name, args[i + 1]);
             i += 2;
         }
         return raw;
-    }
-
-    private void checkForUnknown(Map<String, String> raw) throws ArgsParseException {
-        for (String name : raw.keySet()) {
-            if (!specs.containsKey(name)) {
-                throw new ArgsParseException("Unknown parameter: --" + name);
-            }
-        }
-    }
-
-    private void checkForRequired(Map<String, String> raw) throws ArgsParseException {
-        for (var entry : specs.entrySet()) {
-            if (entry.getValue().isRequired() && !raw.containsKey(entry.getKey())) {
-                throw new ArgsParseException("Missing required parameter: --" + entry.getKey());
-            }
-        }
-    }
-
-    private Map<String, Object> convertAll(Map<String, String> raw) throws ArgsParseException {
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (var entry : raw.entrySet()) {
-            result.put(entry.getKey(), convertAndValidate(entry.getKey(), entry.getValue(), specs.get(entry.getKey())));
-        }
-        return result;
-    }
-
-    private <T> T convertAndValidate(String name, String raw, ParamSpec<T> spec) throws ArgsParseException {
-        T value;
-        try {
-            value = spec.type().convert(raw);
-        } catch (Exception e) {
-            throw new ArgsParseException(
-                "Invalid value for --" + name + " (expected " + spec.type().name() + "): " + e.getMessage()
-            );
-        }
-        if (spec.validator() != null && !spec.validator().test(value)) {
-            throw new ArgsParseException("Validation failed for --" + name + ": " + spec.validationMessage());
-        }
-        return value;
     }
 }

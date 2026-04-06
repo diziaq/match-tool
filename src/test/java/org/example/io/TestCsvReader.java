@@ -4,62 +4,62 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
-class CsvReaderTest {
+class TestCsvReader {
 
     @Test
     void readsFirstColumn() {
         List<String> result = CsvReader.column("/test.csv", 0, s -> true).toList();
 
-        assertEquals(List.of("alice", "bob", "carol"), result);
+        assertThat(result).containsExactly("alice", "bob", "carol");
     }
 
     @Test
     void readsSecondColumn() {
         List<String> result = CsvReader.column("/test.csv", 1, s -> true).toList();
 
-        assertEquals(List.of("42", "17", "99"), result);
+        assertThat(result).containsExactly("42", "17", "99");
     }
 
     @Test
     void readsThirdColumn() {
         List<String> result = CsvReader.column("/test.csv", 2, s -> true).toList();
 
-        assertEquals(List.of("alpha", "beta", "gamma"), result);
+        assertThat(result).containsExactly("alpha", "beta", "gamma");
     }
 
     @Test
     void skipsHeaderRow() {
         List<String> result = CsvReader.column("/test.csv", 0, s -> true).toList();
 
-        assertFalse(result.contains("name"));
+        assertThat(result).doesNotContain("name");
     }
 
     @Test
     void appliesFilter() {
         List<String> result = CsvReader.column("/test.csv", 0, s -> s.startsWith("a")).toList();
 
-        assertEquals(List.of("alice"), result);
+        assertThat(result).containsExactly("alice");
     }
 
     @Test
     void filterThatExcludesEverything_returnsEmptyStream() {
         List<String> result = CsvReader.column("/test.csv", 0, s -> false).toList();
 
-        assertTrue(result.isEmpty());
+        assertThat(result).isEmpty();
     }
 
     @Test
     void throwsForMissingResource() {
-        assertThrows(IllegalArgumentException.class,
-            () -> CsvReader.column("/nonexistent.csv", 0, s -> true).toList());
+        assertThatThrownBy(() -> CsvReader.column("/nonexistent.csv", 0, s -> true).toList())
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void filterOnNumericColumn() {
         List<String> result = CsvReader.column("/test.csv", 1, s -> Integer.parseInt(s) > 20).toList();
 
-        assertEquals(List.of("42", "99"), result);
+        assertThat(result).containsExactly("42", "99");
     }
 }

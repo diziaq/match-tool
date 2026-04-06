@@ -7,21 +7,21 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
-class SystemShellRunnerTest {
+class TestSystemShellRunner {
 
     private final PrintStream originalOut = System.out;
     private final PrintStream originalErr = System.err;
+    private ByteArrayOutputStream capturedOut;
     private ByteArrayOutputStream capturedErr;
 
     @BeforeEach
     void redirectStreams() {
-        System.setOut(new PrintStream(new ByteArrayOutputStream()));
+        capturedOut = new ByteArrayOutputStream();
         capturedErr = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(capturedOut));
         System.setErr(new PrintStream(capturedErr));
     }
 
@@ -41,7 +41,7 @@ class SystemShellRunnerTest {
 
         String output = runner.run("echo hello");
 
-        assertEquals("hello\n", output);
+        assertThat(output).isEqualTo("hello\n");
     }
 
     @Test
@@ -50,8 +50,7 @@ class SystemShellRunnerTest {
 
         String output = runner.run("printf 'line1\\nline2\\n'");
 
-        assertTrue(output.contains("line1"));
-        assertTrue(output.contains("line2"));
+        assertThat(output).contains("line1").contains("line2");
     }
 
     @Test
@@ -60,25 +59,17 @@ class SystemShellRunnerTest {
 
         String output = runner.run("true");
 
-        assertEquals("", output);
+        assertThat(output).isEmpty();
     }
 
     @Test
     void run_logsDebugMessages() throws Exception {
-        List<String> debugMessages = new ArrayList<>();
-        Logger capturingLogger = new Logger(Logger.Output.CONSOLE, true) {
-            // Use real console logger — debug messages will appear in captured output
-        };
-        ByteArrayOutputStream captured = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(captured));
+        var runner = new SystemShellRunner(new Logger(Logger.Output.CONSOLE, true));
+        capturedOut.reset();
 
-        Logger logger = new Logger(Logger.Output.CONSOLE, true);
-        var runner = new SystemShellRunner(logger);
         runner.run("echo test");
 
-        String output = captured.toString();
-        assertTrue(output.contains("[DEBUG]"));
-        assertTrue(output.contains("Executing"));
+        assertThat(capturedOut.toString()).contains("[DEBUG]").contains("Executing");
     }
 
     @Test
@@ -87,7 +78,7 @@ class SystemShellRunnerTest {
 
         runner.run("echo error-output >&2");
 
-        assertTrue(capturedErr.toString().contains("STDERR"));
+        assertThat(capturedErr.toString()).contains("STDERR");
     }
 
     @Test
@@ -96,7 +87,7 @@ class SystemShellRunnerTest {
 
         String output = runner.run("echo stdout; echo stderr >&2");
 
-        assertEquals("stdout\n", output);
-        assertFalse(output.contains("stderr"));
+        assertThat(output).isEqualTo("stdout\n");
+        assertThat(output).doesNotContain("stderr");
     }
 }

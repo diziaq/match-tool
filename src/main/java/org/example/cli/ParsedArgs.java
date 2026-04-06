@@ -1,39 +1,38 @@
 package org.example.cli;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/** Typed result of a successful {@link ArgsParser#parse} call. */
+/** Immutable typed result of a successful {@link ArgsParser#parse} call. */
 public final class ParsedArgs {
 
-    private final Map<String, Object> values;
+    private static final Logger LOG = Logger.getLogger(ParsedArgs.class.getName());
 
-    ParsedArgs(Map<String, Object> values) {
-        this.values = Map.copyOf(values);
+    private final Map<String, Object> values;
+    private final Set<String> knownNames;
+
+    ParsedArgs(Map<String, Object> values, Set<String> knownNames) {
+        this.values     = Collections.unmodifiableMap(new LinkedHashMap<>(values));
+        this.knownNames = Set.copyOf(knownNames);
+        if (LOG.isLoggable(Level.FINE)) {
+            this.values.forEach((k, v) -> LOG.fine("arg --" + k + " = " + v));
+        }
     }
 
     /**
      * Returns the value for the given parameter name.
-     * The cast is safe as long as the caller uses the same type that was declared in the spec.
      *
-     * @throws NoSuchElementException if the parameter was not provided (use {@link #getOptional} for optional params)
+     * @throws IllegalArgumentException if {@code name} was not registered with the parser
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String name) {
-        if (!values.containsKey(name)) {
-            throw new NoSuchElementException("Parameter not present: --" + name);
+        if (!knownNames.contains(name)) {
+            throw new IllegalArgumentException("Unknown parameter: --" + name);
         }
         return (T) values.get(name);
-    }
-
-    /** Returns the value wrapped in Optional, or empty if the parameter was not provided. */
-    @SuppressWarnings("unchecked")
-    public <T> Optional<T> getOptional(String name) {
-        return Optional.ofNullable((T) values.get(name));
-    }
-
-    public boolean has(String name) {
-        return values.containsKey(name);
     }
 }

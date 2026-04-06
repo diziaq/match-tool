@@ -6,9 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
-class PairMatcherTest {
+class TestPairMatcher {
 
     private final PairMatcher<String, String> matcher = new PairMatcher<>();
 
@@ -23,23 +23,18 @@ class PairMatcherTest {
             matched::add
         );
 
-        assertEquals(1, matched.size());
-        assertEquals("a", matched.get(0).left());
-        assertEquals("1", matched.get(0).right());
+        assertThat(matched).hasSize(1);
+        assertThat(matched.get(0).left()).isEqualTo("a");
+        assertThat(matched.get(0).right()).isEqualTo("1");
     }
 
     @Test
     void doesNotCallOnMatchWhenPredicateFalse() {
         List<Match<String, String>> matched = new ArrayList<>();
 
-        matcher.match(
-            List.of("a"),
-            Stream.of("x"),
-            (l, r) -> false,
-            matched::add
-        );
+        matcher.match(List.of("a"), Stream.of("x"), (l, r) -> false, matched::add);
 
-        assertTrue(matched.isEmpty());
+        assertThat(matched).isEmpty();
     }
 
     @Test
@@ -53,13 +48,8 @@ class PairMatcherTest {
             m -> {}
         );
 
-        assertEquals(6, attempted.size());
-        assertTrue(attempted.contains("L1+R1"));
-        assertTrue(attempted.contains("L1+R2"));
-        assertTrue(attempted.contains("L1+R3"));
-        assertTrue(attempted.contains("L2+R1"));
-        assertTrue(attempted.contains("L2+R2"));
-        assertTrue(attempted.contains("L2+R3"));
+        assertThat(attempted).hasSize(6)
+            .contains("L1+R1", "L1+R2", "L1+R3", "L2+R1", "L2+R2", "L2+R3");
     }
 
     @Test
@@ -73,7 +63,7 @@ class PairMatcherTest {
             m -> {}
         );
 
-        assertEquals(List.of("R1-L1", "R1-L2", "R2-L1", "R2-L2"), order);
+        assertThat(order).containsExactly("R1-L1", "R1-L2", "R2-L1", "R2-L2");
     }
 
     @Test
@@ -82,7 +72,7 @@ class PairMatcherTest {
 
         matcher.match(List.of(), Stream.of("R1", "R2"), (l, r) -> true, matched::add);
 
-        assertTrue(matched.isEmpty());
+        assertThat(matched).isEmpty();
     }
 
     @Test
@@ -91,21 +81,16 @@ class PairMatcherTest {
 
         matcher.match(List.of("L1"), Stream.empty(), (l, r) -> true, matched::add);
 
-        assertTrue(matched.isEmpty());
+        assertThat(matched).isEmpty();
     }
 
     @Test
     void multipleMatchesAllReported() {
         List<Match<String, String>> matched = new ArrayList<>();
 
-        matcher.match(
-            List.of("a", "b"),
-            Stream.of("1", "2"),
-            (l, r) -> true,
-            matched::add
-        );
+        matcher.match(List.of("a", "b"), Stream.of("1", "2"), (l, r) -> true, matched::add);
 
-        assertEquals(4, matched.size());
+        assertThat(matched).hasSize(4);
     }
 
     @Test
@@ -120,20 +105,15 @@ class PairMatcherTest {
             matched::add
         );
 
-        assertEquals(3, matched.size());
+        assertThat(matched).hasSize(4);
     }
 
     @Test
     void onMatchReceivesCorrectPair() {
         List<Match<String, String>> matched = new ArrayList<>();
 
-        matcher.match(
-            List.of("net"),
-            Stream.of("pass"),
-            (l, r) -> true,
-            matched::add
-        );
+        matcher.match(List.of("net"), Stream.of("pass"), (l, r) -> true, matched::add);
 
-        assertEquals(new Match<>("net", "pass"), matched.get(0));
+        assertThat(matched.get(0)).isEqualTo(new Match<>("net", "pass"));
     }
 }
