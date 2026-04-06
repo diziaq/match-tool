@@ -1,7 +1,6 @@
-package org.example;
+package org.example.wifi.scan;
 
 import org.example.wifi.Network;
-import org.example.wifi.scan.NetworkOutputParser;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +28,13 @@ class NetworkOutputParserTest {
         }
 
         @Test
+        void appendsDbmSuffix() {
+            List<Network> result = NetworkOutputParser.parseMacOs("Net|-72\n");
+
+            assertEquals("-72 dBm", result.get(0).signal());
+        }
+
+        @Test
         void skipsBlankSSIDs() {
             String output = """
                     RealNetwork|-50
@@ -43,8 +49,25 @@ class NetworkOutputParserTest {
         }
 
         @Test
+        void skipsLinesWithoutPipe() {
+            String output = """
+                    no pipe here
+                    GoodNetwork|-55
+                    """;
+            List<Network> result = NetworkOutputParser.parseMacOs(output);
+
+            assertEquals(1, result.size());
+            assertEquals("GoodNetwork", result.get(0).ssid());
+        }
+
+        @Test
         void handlesEmptyOutput() {
             assertTrue(NetworkOutputParser.parseMacOs("").isEmpty());
+        }
+
+        @Test
+        void handlesBlankOnlyOutput() {
+            assertTrue(NetworkOutputParser.parseMacOs("   \n   \n").isEmpty());
         }
 
         @Test
@@ -59,6 +82,13 @@ class NetworkOutputParserTest {
 
             assertEquals(1, result.size());
             assertEquals("GoodNetwork", result.get(0).ssid());
+        }
+
+        @Test
+        void signalPartPreservedAsIs() {
+            List<Network> result = NetworkOutputParser.parseMacOs("Net|-45\n");
+
+            assertEquals("-45 dBm", result.get(0).signal());
         }
     }
 
@@ -80,6 +110,13 @@ class NetworkOutputParserTest {
         }
 
         @Test
+        void appendsPercentSuffix() {
+            List<Network> result = NetworkOutputParser.parseLinux("Router:77\n");
+
+            assertEquals("77%", result.get(0).signal());
+        }
+
+        @Test
         void skipsBlankSSIDs() {
             String output = """
                     Good:80
@@ -89,6 +126,17 @@ class NetworkOutputParserTest {
             List<Network> result = NetworkOutputParser.parseLinux(output);
 
             assertEquals(2, result.size());
+        }
+
+        @Test
+        void skipsLinesWithoutColon() {
+            String output = """
+                    no colon here
+                    Valid:60
+                    """;
+            List<Network> result = NetworkOutputParser.parseLinux(output);
+
+            assertEquals(1, result.size());
         }
 
         @Test
@@ -105,12 +153,12 @@ class NetworkOutputParserTest {
             var nets = List.of(
                 new Network("Zebra", "-30 dBm"),
                 new Network("alpha", "-50 dBm"),
-                new Network("Beta", "-40 dBm")
+                new Network("Beta",  "-40 dBm")
             );
             List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertEquals("alpha", result.get(0).ssid());
-            assertEquals("Beta", result.get(1).ssid());
+            assertEquals("Beta",  result.get(1).ssid());
             assertEquals("Zebra", result.get(2).ssid());
         }
 
@@ -139,8 +187,30 @@ class NetworkOutputParserTest {
         }
 
         @Test
+        void deduplicatesKeepingStrongerWhenSignalIsPositive() {
+            var nets = List.of(
+                new Network("Net", "50%"),
+                new Network("Net", "80%"),
+                new Network("Net", "30%")
+            );
+            List<Network> result = NetworkOutputParser.deduplicated(nets);
+
+            assertEquals(1, result.size());
+            assertEquals("80%", result.get(0).signal());
+        }
+
+        @Test
         void handlesEmptyList() {
             assertTrue(NetworkOutputParser.deduplicated(List.of()).isEmpty());
+        }
+
+        @Test
+        void singleNetwork_returnedAsIs() {
+            var nets = List.of(new Network("Solo", "-50 dBm"));
+            List<Network> result = NetworkOutputParser.deduplicated(nets);
+
+            assertEquals(1, result.size());
+            assertEquals("Solo", result.get(0).ssid());
         }
     }
 }

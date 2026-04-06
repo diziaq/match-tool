@@ -81,7 +81,7 @@ public class Main {
                     .filter(allowedNetworks::contains)
                     .toList();
 
-                int skipPasswords = 17;
+                int skipPasswords = 0;
                 logger.debug("Skipping first " + skipPasswords + " passwords");
                 logger.debug("Trying networks: " + targetNetworks);
 
