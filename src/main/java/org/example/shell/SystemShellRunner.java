@@ -1,20 +1,20 @@
 package org.example.shell;
 
+import org.example.io.Logger;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.util.function.Consumer;
 
 public class SystemShellRunner implements ShellRunner {
 
-    private final Consumer<String> debug;
+    private final Logger logger;
 
-    public SystemShellRunner(Consumer<String> debug) {
-        this.debug = debug;
+    public SystemShellRunner(Logger logger) {
+        this.logger = logger;
     }
 
     @Override
     public String run(String command) throws Exception {
-        debug.accept("Executing: " + command);
+        logger.debug("Executing: " + command);
         Process process = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", command});
         StringBuilder stdout = new StringBuilder(), stderr = new StringBuilder();
         try (var br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -26,11 +26,10 @@ public class SystemShellRunner implements ShellRunner {
             while ((line = br.readLine()) != null) stderr.append(line).append("\n");
         }
         int exitCode = process.waitFor();
-        debug.accept("Exit code: " + exitCode);
-        debug.accept("Stdout (" + stdout.length() + " chars): " + stdout.toString().replace('\n', '|'));
+        logger.debug("Exit code: " + exitCode);
+        logger.debug("Stdout (" + stdout.length() + " chars): " + stdout.toString().replace('\n', '|'));
         if (!stderr.toString().isBlank()) {
-            debug.accept("Stderr: " + stderr);
-            System.err.println("STDERR: " + stderr);
+            logger.error("STDERR: " + stderr.toString().trim());
         }
         return stdout.toString();
     }
