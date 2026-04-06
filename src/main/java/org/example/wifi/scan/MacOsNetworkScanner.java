@@ -17,7 +17,7 @@ public class MacOsNetworkScanner implements NetworkScanner {
 
     @Override
     public List<Network> scan() throws Exception {
-        File tmp = File.createTempFile("wifi_scan", ".swift");
+        var tmp = File.createTempFile("wifi_scan", ".swift");
         tmp.deleteOnExit();
         try (var in = MacOsNetworkScanner.class.getResourceAsStream("/wifi_scan.swift");
              var out = new FileOutputStream(tmp)) {

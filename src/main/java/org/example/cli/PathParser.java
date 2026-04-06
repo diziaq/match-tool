@@ -9,7 +9,7 @@ class PathParser implements Function<String, Path> {
 
     @Override
     public Path apply(String raw) {
-        Path path = Path.of(raw);
+        var path = Path.of(raw);
 
         if (!path.isAbsolute()) {
             path = jarDir().resolve(raw);
@@ -24,7 +24,7 @@ class PathParser implements Function<String, Path> {
 
     private static Path jarDir() {
         try {
-            Path jar = Path.of(PathParser.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            var jar = Path.of(PathParser.class.getProtectionDomain().getCodeSource().getLocation().toURI());
             return jar.getParent();
         } catch (URISyntaxException e) {
             throw new IllegalStateException("Cannot determine jar location", e);

@@ -90,7 +90,7 @@ public class Logger implements AutoCloseable {
 
     private static Path jarDir() {
         try {
-            Path jar = Path.of(Logger.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            var jar = Path.of(Logger.class.getProtectionDomain().getCodeSource().getLocation().toURI());
             return jar.getParent();
         } catch (URISyntaxException e) {
             throw new IllegalStateException("Cannot determine jar location", e);

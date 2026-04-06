@@ -47,9 +47,9 @@ public class Main {
         int skip = cli.get("skip");
         boolean debug = cli.get("debug");
 
-        Logger logger = new Logger(Logger.Output.CONSOLE, debug);
+        var logger = new Logger(Logger.Output.CONSOLE, debug);
 
-        Platform platform = Platform.detect();
+        var platform = Platform.detect();
         logger.debug("Platform: " + platform);
 
         ShellRunner shell = new SystemShellRunner(logger);
@@ -65,7 +65,7 @@ public class Main {
                 networks.forEach(n -> logger.info(String.format("  %-30s %s", n.ssid(), n.signal())));
             }
             case 2 -> {
-                Scanner input = new Scanner(System.in);
+                var input = new Scanner(System.in);
                 logger.print("SSID: ");
                 String ssid = input.nextLine();
                 logger.print("Password: ");

@@ -15,8 +15,9 @@ public class SystemShellRunner implements ShellRunner {
     @Override
     public String run(String command) throws Exception {
         logger.debug("Executing: " + command);
-        Process process = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", command});
-        StringBuilder stdout = new StringBuilder(), stderr = new StringBuilder();
+        var process = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", command});
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
         try (var br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = br.readLine()) != null) stdout.append(line).append("\n");
