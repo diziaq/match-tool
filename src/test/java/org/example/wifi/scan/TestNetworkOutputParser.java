@@ -1,6 +1,7 @@
 package org.example.wifi.scan;
 
 import org.example.wifi.Network;
+import org.example.wifi.Strength;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -24,14 +25,18 @@ class TestNetworkOutputParser {
 
             assertThat(result).hasSize(3);
             assertThat(result.get(0).ssid()).isEqualTo("HomeWiFi");
-            assertThat(result.get(0).signal()).isEqualTo("-45 dBm");
+            assertThat(result.get(0).strength().value()).isEqualTo(-45);
+            assertThat(result.get(0).strength()).isInstanceOf(Strength.Best.class);
         }
 
         @Test
-        void appendsDbmSuffix() {
-            List<Network> result = NetworkOutputParser.parseMacOs("Net|-72\n");
+        void classifiesSignalStrength() {
+            // -45 → Best, -75 → Normal, -90 → Weak
+            List<Network> result = NetworkOutputParser.parseMacOs("A|-45\nB|-75\nC|-90\n");
 
-            assertThat(result.get(0).signal()).isEqualTo("-72 dBm");
+            assertThat(result.get(0).strength()).isInstanceOf(Strength.Best.class);
+            assertThat(result.get(1).strength()).isInstanceOf(Strength.Normal.class);
+            assertThat(result.get(2).strength()).isInstanceOf(Strength.Weak.class);
         }
 
         @Test
@@ -60,13 +65,17 @@ class TestNetworkOutputParser {
         }
 
         @Test
-        void handlesEmptyOutput() {
-            assertThat(NetworkOutputParser.parseMacOs("")).isEmpty();
+        void skipsLinesWithNonIntegerSignal() {
+            // Lines with pipe but unparseable signal are silently dropped
+            List<Network> result = NetworkOutputParser.parseMacOs("Good|-55\nBad|notANumber\n");
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).ssid()).isEqualTo("Good");
         }
 
         @Test
-        void handlesBlankOnlyOutput() {
-            assertThat(NetworkOutputParser.parseMacOs("   \n   \n")).isEmpty();
+        void handlesEmptyOutput() {
+            assertThat(NetworkOutputParser.parseMacOs("")).isEmpty();
         }
 
         @Test
@@ -81,13 +90,6 @@ class TestNetworkOutputParser {
 
             assertThat(result).hasSize(1);
             assertThat(result.get(0).ssid()).isEqualTo("GoodNetwork");
-        }
-
-        @Test
-        void signalPartPreservedAsIs() {
-            List<Network> result = NetworkOutputParser.parseMacOs("Net|-45\n");
-
-            assertThat(result.get(0).signal()).isEqualTo("-45 dBm");
         }
     }
 
@@ -105,14 +107,18 @@ class TestNetworkOutputParser {
 
             assertThat(result).hasSize(3);
             assertThat(result.get(0).ssid()).isEqualTo("MyRouter");
-            assertThat(result.get(0).signal()).isEqualTo("85%");
+            assertThat(result.get(0).strength().value()).isEqualTo(85);
+            assertThat(result.get(0).strength()).isInstanceOf(Strength.Best.class);
         }
 
         @Test
-        void appendsPercentSuffix() {
-            List<Network> result = NetworkOutputParser.parseLinux("Router:77\n");
+        void classifiesSignalStrength() {
+            // 85% → Best, 50% → Normal, 20% → Weak
+            List<Network> result = NetworkOutputParser.parseLinux("A:85\nB:50\nC:20\n");
 
-            assertThat(result.get(0).signal()).isEqualTo("77%");
+            assertThat(result.get(0).strength()).isInstanceOf(Strength.Best.class);
+            assertThat(result.get(1).strength()).isInstanceOf(Strength.Normal.class);
+            assertThat(result.get(2).strength()).isInstanceOf(Strength.Weak.class);
         }
 
         @Test
@@ -139,6 +145,14 @@ class TestNetworkOutputParser {
         }
 
         @Test
+        void skipsLinesWithNonIntegerSignal() {
+            List<Network> result = NetworkOutputParser.parseLinux("Good:75\nBad:notANumber\n");
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).ssid()).isEqualTo("Good");
+        }
+
+        @Test
         void handlesEmptyOutput() {
             assertThat(NetworkOutputParser.parseLinux("")).isEmpty();
         }
@@ -150,9 +164,9 @@ class TestNetworkOutputParser {
         @Test
         void sortsByNameCaseInsensitive() {
             var nets = List.of(
-                new Network("Zebra", "-30 dBm"),
-                new Network("alpha", "-50 dBm"),
-                new Network("Beta",  "-40 dBm")
+                Network.of("Zebra", -30),
+                Network.of("alpha", -50),
+                Network.of("Beta",  -40)
             );
             List<Network> result = NetworkOutputParser.deduplicated(nets);
 
@@ -161,23 +175,23 @@ class TestNetworkOutputParser {
         }
 
         @Test
-        void deduplicatesKeepingStrongestSignal() {
+        void deduplicatesKeepingStrongestDbmSignal() {
             var nets = List.of(
-                new Network("Office", "-67 dBm"),
-                new Network("Office", "-34 dBm"),
-                new Network("Office", "-50 dBm")
+                Network.of("Office", -67),
+                Network.of("Office", -34),
+                Network.of("Office", -50)
             );
             List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).signal()).isEqualTo("-34 dBm");
+            assertThat(result.get(0).strength().value()).isEqualTo(-34);
         }
 
         @Test
         void deduplicatesCaseInsensitive() {
             var nets = List.of(
-                new Network("office", "-60 dBm"),
-                new Network("Office", "-40 dBm")
+                Network.of("office", -60),
+                Network.of("Office", -40)
             );
             List<Network> result = NetworkOutputParser.deduplicated(nets);
 
@@ -185,16 +199,16 @@ class TestNetworkOutputParser {
         }
 
         @Test
-        void deduplicatesKeepingStrongerPercentSignal() {
+        void deduplicatesKeepingStrongestPercentSignal() {
             var nets = List.of(
-                new Network("Net", "50%"),
-                new Network("Net", "80%"),
-                new Network("Net", "30%")
+                Network.of("Net", 50),
+                Network.of("Net", 80),
+                Network.of("Net", 30)
             );
             List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).signal()).isEqualTo("80%");
+            assertThat(result.get(0).strength().value()).isEqualTo(80);
         }
 
         @Test
@@ -204,7 +218,7 @@ class TestNetworkOutputParser {
 
         @Test
         void singleNetwork_returnedAsIs() {
-            var nets = List.of(new Network("Solo", "-50 dBm"));
+            var nets = List.of(Network.of("Solo", -50));
             List<Network> result = NetworkOutputParser.deduplicated(nets);
 
             assertThat(result).hasSize(1);

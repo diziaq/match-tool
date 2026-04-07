@@ -15,6 +15,7 @@ import org.example.matcher.PairMatcher;
 import org.example.shell.ShellRunner;
 import org.example.shell.SystemShellRunner;
 import org.example.wifi.Network;
+import org.example.wifi.Password;
 import org.example.wifi.connect.NetworkConnector;
 import org.example.wifi.scan.NetworkScanner;
 
@@ -76,7 +77,7 @@ public class Main {
                 List<Network> networks = scanner.scan();
                 logger.info(String.format("  %-30s %s", "SSID", "SIGNAL"));
                 logger.info("  " + "-".repeat(40));
-                networks.forEach(n -> logger.info(String.format("  %-30s %s", n.ssid(), n.signal())));
+                networks.forEach(n -> logger.info(String.format("  %-30s %s", n.ssid(), n.strength())));
             }
             case 2 -> {
                 var input = new Scanner(System.in);
@@ -84,7 +85,7 @@ public class Main {
                 String ssid = input.nextLine();
                 logger.print("Password: ");
                 String password = input.nextLine();
-                String message = switch (connector.test(new Network(ssid, ""), password)) {
+                String message = switch (connector.test(Network.of(ssid), new Password(password))) {
                     case MatchOutcome.Match()        -> "Connected to: " + ssid;
                     case MatchOutcome.Unavailable()  -> "Network not found: " + ssid;
                     case MatchOutcome.Mismatch()     -> "Wrong password for: " + ssid;
@@ -96,21 +97,21 @@ public class Main {
                 requireFile(left, "left", logger);
                 requireFile(right, "right", logger);
                 List<Network> lefts = Files.readAllLines(left).stream()
-                    .map(ssid -> new Network(ssid, "")).toList();
+                    .map(Network::of).toList();
                 String prefix = LocalDateTime.now().format(LOG_FILE_TIMESTAMP);
                 try (var traceLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_trace.log");
                      var successLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_success.log")) {
-                    MatchPredicate<Network, String> tracingPredicate = (network, password) -> {
+                    MatchPredicate<Network, Password> tracingPredicate = (network, password) -> {
                         MatchOutcome outcome = connector.test(network, password);
-                        traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password, network.ssid()));
+                        traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password.value(), network.ssid()));
                         return outcome;
                     };
-                    new PairMatcher<Network, String>().match(
+                    new PairMatcher<Network, Password>().match(
                         lefts,
-                        Files.lines(right).skip(skip),
+                        Files.lines(right).skip(skip).map(Password::new),
                         tracingPredicate,
                         match -> {
-                            successLog.info("TRUE: %s @ %s".formatted(match.right(), match.left().ssid()));
+                            successLog.info("TRUE: %s @ %s".formatted(match.right().value(), match.left().ssid()));
                             logger.info("Matched " + match);
                         }
                     );

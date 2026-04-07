@@ -2,11 +2,12 @@ package org.example.wifi.connect;
 
 import org.example.Platform;
 import org.example.PlatformDependent;
+import org.example.wifi.Password;
 
 /**
  * Builds the OS-specific shell command that attempts a WiFi connection.
  *
- * <p>Implementations must shell-escape both {@code ssid} and {@code password} via
+ * <p>Implementations must shell-escape both the SSID and {@link Password#value()} via
  * {@link ShellEscape#quoted} to prevent injection through special characters in network names or
  * passwords.
  */
@@ -15,7 +16,7 @@ public interface ConnectCommand extends PlatformDependent {
     /**
      * @return a fully-formed shell command ready to be passed to {@link org.example.shell.ShellRunner#run}
      */
-    String build(String ssid, String password);
+    String build(String ssid, Password password);
 
     static ConnectCommand of(Platform platform) {
         return switch (platform) {

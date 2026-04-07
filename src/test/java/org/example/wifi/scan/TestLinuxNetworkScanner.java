@@ -1,6 +1,7 @@
 package org.example.wifi.scan;
 
 import org.example.wifi.Network;
+import org.example.wifi.Strength;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,8 @@ class TestLinuxNetworkScanner {
 
             assertThat(result).hasSize(2);
             assertThat(result.get(0).ssid()).isEqualTo("HomeWiFi");
-            assertThat(result.get(0).signal()).isEqualTo("75%");
+            assertThat(result.get(0).strength().value()).isEqualTo(75);
+            assertThat(result.get(0).strength()).isInstanceOf(Strength.Best.class);
         }
 
         @Test
@@ -49,13 +51,13 @@ class TestLinuxNetworkScanner {
     class Deduplication {
 
         @Test
-        void scan_deduplicatesResults() throws Exception {
+        void scan_deduplicatesKeepingStrongestSignal() throws Exception {
             var scanner = new LinuxNetworkScanner(cmd -> "Net:50\nNet:80\nNet:30\n");
 
             List<Network> result = scanner.scan();
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).signal()).isEqualTo("80%");
+            assertThat(result.get(0).strength().value()).isEqualTo(80);
         }
     }
 
@@ -69,18 +71,17 @@ class TestLinuxNetworkScanner {
             assertThat(scanner.scan()).isEmpty();
         }
 
-        // Opinion: nmcli uses ':' as its field separator, so SSIDs that contain ':' are truncated
-        // at the first colon. Pinning this known limitation prevents silent regressions if the
-        // parsing logic is ever changed and also documents the constraint for future maintainers.
+        // Opinion: nmcli uses ':' as delimiter so SSIDs containing ':' cause the signal field to
+        // be non-numeric ("HQ") which now causes the whole line to be silently skipped rather
+        // than producing a truncated entry. Pinning this behaviour documents the limitation.
         @Test
-        void scan_ssidWithColonInName_isTruncatedAtFirstColon() throws Exception {
+        void scan_ssidWithColonInName_lineIsSkipped() throws Exception {
             var scanner = new LinuxNetworkScanner(cmd -> "Corp:HQ:75\n");
 
             List<Network> result = scanner.scan();
 
-            // "Corp:HQ" is split as SSID="Corp", signal="HQ:75%" — only "Corp" survives as SSID
-            assertThat(result).hasSize(1);
-            assertThat(result.get(0).ssid()).isEqualTo("Corp");
+            // "Corp:HQ:75".split(":") → ["Corp","HQ","75"]; parts[1]="HQ" is not an integer
+            assertThat(result).isEmpty();
         }
     }
 }
