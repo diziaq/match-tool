@@ -5,7 +5,7 @@ oppinion in each case
    e.g. stop one on first match / stop all on first match / exclude item on Nth failure / etc.
    if result is undefined can retry M times
 
-3. The ConnectOutcome should be generified to MatchOutcome(FAILURE, MATCH, MISMATCH, ???anything else needed???)
+done 3. The ConnectOutcome should be generified to MatchOutcome(FAILURE, MATCH, MISMATCH, ???anything else needed???)
 
 4. investigate idea how to vary the behaviour 
 and make left-right in-out-switch places of the loops, but preserve the behavior in ` do_match(l, r)`

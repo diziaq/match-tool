@@ -14,16 +14,6 @@ package org.example.matcher;
  *   <li>{@link Failure} — an unexpected technical error prevented a clean determination;
  *       {@code reason} carries the raw output or exception message for diagnostics.</li>
  * </ul>
- *
- * <p>WiFi classification mapping:
- * <pre>
- *   networksetup silent output          → Match
- *   nmcli "successfully …"              → Match
- *   "Failed to join …" tmpErr           → Mismatch   (wrong password)
- *   "Could not find network …"          → Unavailable
- *   "Failed to join …" apple80211API    → Failure    (security-type mismatch)
- *   unrecognised output / exception     → Failure
- * </pre>
  */
 public sealed interface MatchOutcome
     permits MatchOutcome.Match,
