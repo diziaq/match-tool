@@ -1,4 +1,4 @@
-1. write javadocs for all classes explaining why and how to use; test classes contatinin lot of code restructure to use nested classes for example (BaseCaeses CornerCases Failures), and anything on your      
+done 1. write javadocs for all classes explaining why and how to use; test classes contatinin lot of code restructure to use nested classes for example (BaseCaeses CornerCases Failures), and anything on your      
 oppinion in each case   
 
 2. for matcher create a wrappring coordinator with varying behavior
