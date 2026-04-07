@@ -5,7 +5,8 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import org.example.cli.ArgsParser;
+import org.example.cli.ArgSchema;
+import org.example.cli.CliArgSource;
 import org.example.cli.ParsedArgs;
 import org.example.io.Logger;
 import org.example.matcher.MatchCoordinator;
@@ -35,26 +36,36 @@ public class Main {
     private static final DateTimeFormatter LOG_FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
 
     public static void main(String[] args) throws Exception {
+        ArgSchema schema = ArgSchema.builder()
+            .required("mode", Integer.class, raw -> {
+                int m = Integer.parseInt(raw);
+                if (m < 1 || m > 2) throw new IllegalArgumentException("must be 1..2");
+                return m;
+            })
+            .optional("left", Path.class, ArgSchema.PATH, null)
+            .optional("right", Path.class, ArgSchema.PATH, null)
+            .optional("skip", Integer.class, ArgSchema.INTEGER, 0)
+            .optional("debug", Boolean.class, Boolean::parseBoolean, false)
+            .build();
+
         ParsedArgs cli;
         try {
-            cli = new ArgsParser()
-                      .registerRequired("mode", Integer.class, raw -> {
-                          int m = Integer.parseInt(raw);
-                          if (m < 1 || m > 2) throw new IllegalArgumentException("must be 1..2");
-                          return m;
-                      })
-                      .registerOptional("left", Path.class, ArgsParser.PATH, null)
-                      .registerOptional("right", Path.class, ArgsParser.PATH, null)
-                      .registerOptional("skip", Integer.class, ArgsParser.INTEGER, 0)
-                      .registerOptional("debug", Boolean.class, Boolean::parseBoolean, false)
-                      .parse(args);
-        } catch (ArgsParser.ParseException e) {
+            cli = new ParsedArgs(schema, new CliArgSource(args));
+        } catch (IllegalArgumentException e) {
             System.err.println("Usage error:\n" + e.getMessage());
             System.exit(1);
             return;
         }
 
-        int mode = cli.get("mode");
+        int mode;
+        try {
+            mode = cli.get("mode");
+        } catch (IllegalArgumentException e) {
+            System.err.println("Usage error:\n" + e.getMessage());
+            System.exit(1);
+            return;
+        }
+
         Path left = cli.get("left");
         Path right = cli.get("right");
         int skip = cli.get("skip");

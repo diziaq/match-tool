@@ -4,7 +4,7 @@ import java.util.function.Function;
 
 /**
  * Parses a raw string to {@link Integer}, wrapping {@link NumberFormatException} in a more
- * descriptive {@link IllegalArgumentException}. Used as {@link ArgsParser#INTEGER}.
+ * descriptive {@link IllegalArgumentException}. Used as {@link ArgSchema#INTEGER}.
  */
 class IntegerParser implements Function<String, Integer> {
 

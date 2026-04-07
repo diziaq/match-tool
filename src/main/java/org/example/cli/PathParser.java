@@ -8,7 +8,7 @@ import java.util.function.Function;
 /**
  * Resolves a raw string to an existing {@link Path}. Relative paths are anchored to the directory
  * that contains the application jar. Throws {@link IllegalArgumentException} if the resulting path
- * does not exist. Used as {@link ArgsParser#PATH}.
+ * does not exist. Used as {@link ArgSchema#PATH}.
  */
 class PathParser implements Function<String, Path> {
 
