@@ -2,15 +2,16 @@ package org.example.wifi.connect;
 
 import org.example.Platform;
 import org.example.io.Logger;
+import org.example.matcher.MatchOutcome;
 import org.example.shell.ShellRunner;
 
 /**
- * {@link NetworkConnector} that delegates to a {@link org.example.shell.ShellRunner}.
+ * {@link NetworkConnector} that delegates to a {@link ShellRunner}.
  *
  * <p>Resolves the correct {@link ConnectCommand} and {@link OutputClassifier} for the current
  * platform at construction time. Any exception thrown by the shell runner is caught and returned as
- * {@link ConnectOutcome.UnknownFailure}, so callers (particularly batch mode) never crash on a
- * single bad attempt.
+ * {@link MatchOutcome.Failure}, so callers (particularly batch mode) never crash on a single bad
+ * attempt.
  */
 public class ShellNetworkConnector implements NetworkConnector {
 
@@ -27,17 +28,17 @@ public class ShellNetworkConnector implements NetworkConnector {
     }
 
     @Override
-    public ConnectOutcome tryConnect(String ssid, String password) {
+    public MatchOutcome tryConnect(String ssid, String password) {
         logger.debug("Attempting connection to '" + ssid + "'");
         try {
             String cmd = connectCommand.build(ssid, password);
             String output = shell.run(cmd);
-            ConnectOutcome outcome = outputClassifier.classify(output);
+            MatchOutcome outcome = outputClassifier.classify(output);
             logger.debug("Connection result: " + outcome.getClass().getSimpleName() + " | output: " + output);
             return outcome;
         } catch (Exception e) {
             logger.debug("Connection exception: " + e.getMessage());
-            return new ConnectOutcome.UnknownFailure(e.getMessage());
+            return new MatchOutcome.Failure(e.getMessage());
         }
     }
 }

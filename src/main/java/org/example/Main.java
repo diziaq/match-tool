@@ -9,11 +9,11 @@ import java.util.Scanner;
 import org.example.cli.ArgsParser;
 import org.example.cli.ParsedArgs;
 import org.example.io.Logger;
+import org.example.matcher.MatchOutcome;
 import org.example.matcher.PairMatcher;
 import org.example.shell.ShellRunner;
 import org.example.shell.SystemShellRunner;
 import org.example.wifi.Network;
-import org.example.wifi.connect.ConnectOutcome;
 import org.example.wifi.connect.NetworkConnector;
 import org.example.wifi.scan.NetworkScanner;
 
@@ -84,11 +84,10 @@ public class Main {
                 logger.print("Password: ");
                 String password = input.nextLine();
                 String message = switch (connector.tryConnect(ssid, password)) {
-                    case ConnectOutcome.Connected()         -> "Connected to: " + ssid;
-                    case ConnectOutcome.NetworkNotFound()   -> "Network not found: " + ssid;
-                    case ConnectOutcome.WrongPassword()     -> "Wrong password for: " + ssid;
-                    case ConnectOutcome.AssociationFailed() -> "Association failed for: " + ssid;
-                    case ConnectOutcome.UnknownFailure(var out) -> out;
+                    case MatchOutcome.Match()          -> "Connected to: " + ssid;
+                    case MatchOutcome.Unavailable()    -> "Network not found: " + ssid;
+                    case MatchOutcome.Mismatch()       -> "Wrong password for: " + ssid;
+                    case MatchOutcome.Failure(var r)   -> r;
                 };
                 logger.info(message);
             }
@@ -103,9 +102,9 @@ public class Main {
                         lefts,
                         Files.lines(right).skip(skip),
                         (ssid, password) -> {
-                            ConnectOutcome outcome = connector.tryConnect(ssid, password);
+                            MatchOutcome outcome = connector.tryConnect(ssid, password);
                             traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password, ssid));
-                            return outcome instanceof ConnectOutcome.Connected;
+                            return outcome instanceof MatchOutcome.Match;
                         },
                         match -> {
                             successLog.info("TRUE: %s @ %s".formatted(match.right(), match.left()));

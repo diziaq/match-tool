@@ -2,6 +2,7 @@ package org.example.wifi.connect;
 
 import org.example.Platform;
 import org.example.io.Logger;
+import org.example.matcher.MatchOutcome;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -37,51 +38,51 @@ class TestShellNetworkConnector {
     class MacBehaviour {
 
         @Test
-        void returnsConnectedWhenOutputBlank() {
+        void returnsMatchWhenOutputBlank() {
             var connector = new ShellNetworkConnector(cmd -> "", Platform.MACOS, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "secret"))
-                .isInstanceOf(ConnectOutcome.Connected.class);
+                .isInstanceOf(MatchOutcome.Match.class);
         }
 
         @Test
-        void returnsNetworkNotFoundWhenCouldNotFind() {
+        void returnsUnavailableWhenCouldNotFind() {
             var connector = new ShellNetworkConnector(
                 cmd -> "Could not find network HomeWiFi.",
                 Platform.MACOS, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "pass"))
-                .isInstanceOf(ConnectOutcome.NetworkNotFound.class);
+                .isInstanceOf(MatchOutcome.Unavailable.class);
         }
 
         @Test
-        void returnsWrongPasswordForTmpErrOutput() {
+        void returnsMismatchForTmpErrOutput() {
             var connector = new ShellNetworkConnector(
                 cmd -> "Failed to join network HomeWiFi.\nError: -3925  The operation couldn't be completed. tmpErr",
                 Platform.MACOS, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "wrong"))
-                .isInstanceOf(ConnectOutcome.WrongPassword.class);
+                .isInstanceOf(MatchOutcome.Mismatch.class);
         }
 
         @Test
-        void returnsAssociationFailedForApple80211Error() {
+        void returnsFailureForApple80211Error() {
             var connector = new ShellNetworkConnector(
                 cmd -> "Failed to join network HomeWiFi.\nError: -3912  The operation couldn't be completed. (com.apple.wifi.apple80211API.error error -3912.)",
                 Platform.MACOS, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "pass"))
-                .isInstanceOf(ConnectOutcome.AssociationFailed.class);
+                .isInstanceOf(MatchOutcome.Failure.class);
         }
 
         @Test
-        void returnsUnknownFailureForUnrecognizedOutput() {
+        void returnsFailureForUnrecognizedOutput() {
             var connector = new ShellNetworkConnector(
                 cmd -> "some unexpected error",
                 Platform.MACOS, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "pass"))
-                .isInstanceOf(ConnectOutcome.UnknownFailure.class);
+                .isInstanceOf(MatchOutcome.Failure.class);
         }
 
         @Test
@@ -101,33 +102,33 @@ class TestShellNetworkConnector {
     class LinuxBehaviour {
 
         @Test
-        void returnsConnectedWhenOutputContainsSuccessfully() {
+        void returnsMatchWhenOutputContainsSuccessfully() {
             var connector = new ShellNetworkConnector(
                 cmd -> "Device 'wlan0' successfully connected.",
                 Platform.LINUX, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "secret"))
-                .isInstanceOf(ConnectOutcome.Connected.class);
+                .isInstanceOf(MatchOutcome.Match.class);
         }
 
         @Test
-        void returnsUnknownFailureWhenOutputLacksSuccessfully() {
+        void returnsFailureWhenOutputLacksSuccessfully() {
             var connector = new ShellNetworkConnector(
                 cmd -> "Error: Connection failed.",
                 Platform.LINUX, silentLogger());
 
             assertThat(connector.tryConnect("HomeWiFi", "wrong"))
-                .isInstanceOf(ConnectOutcome.UnknownFailure.class);
+                .isInstanceOf(MatchOutcome.Failure.class);
         }
 
         @Test
-        void returnsConnectedCaseInsensitiveForSuccessfully() {
+        void returnsMatchCaseInsensitiveForSuccessfully() {
             var connector = new ShellNetworkConnector(
                 cmd -> "SUCCESSFULLY connected",
                 Platform.LINUX, silentLogger());
 
             assertThat(connector.tryConnect("Net", "pass"))
-                .isInstanceOf(ConnectOutcome.Connected.class);
+                .isInstanceOf(MatchOutcome.Match.class);
         }
 
         @Test
@@ -147,13 +148,24 @@ class TestShellNetworkConnector {
     class SharedBehaviour {
 
         @Test
-        void returnsUnknownFailureOnException() {
+        void returnsFailureOnException() {
             var connector = new ShellNetworkConnector(
                 cmd -> { throw new RuntimeException("network down"); },
                 Platform.MACOS, silentLogger());
 
             assertThat(connector.tryConnect("Net", "pass"))
-                .isInstanceOf(ConnectOutcome.UnknownFailure.class);
+                .isInstanceOf(MatchOutcome.Failure.class);
+        }
+
+        @Test
+        void failureReason_containsExceptionMessage() {
+            var connector = new ShellNetworkConnector(
+                cmd -> { throw new RuntimeException("network down"); },
+                Platform.MACOS, silentLogger());
+
+            MatchOutcome outcome = connector.tryConnect("Net", "pass");
+
+            assertThat(((MatchOutcome.Failure) outcome).reason()).contains("network down");
         }
 
         @Test
