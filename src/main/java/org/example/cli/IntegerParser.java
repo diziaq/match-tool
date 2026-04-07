@@ -2,6 +2,10 @@ package org.example.cli;
 
 import java.util.function.Function;
 
+/**
+ * Parses a raw string to {@link Integer}, wrapping {@link NumberFormatException} in a more
+ * descriptive {@link IllegalArgumentException}. Used as {@link ArgsParser#INTEGER}.
+ */
 class IntegerParser implements Function<String, Integer> {
 
     @Override

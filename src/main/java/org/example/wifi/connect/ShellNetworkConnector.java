@@ -4,6 +4,14 @@ import org.example.Platform;
 import org.example.io.Logger;
 import org.example.shell.ShellRunner;
 
+/**
+ * {@link NetworkConnector} that delegates to a {@link org.example.shell.ShellRunner}.
+ *
+ * <p>Resolves the correct {@link ConnectCommand} and {@link OutputClassifier} for the current
+ * platform at construction time. Any exception thrown by the shell runner is caught and returned as
+ * {@link ConnectOutcome.UnknownFailure}, so callers (particularly batch mode) never crash on a
+ * single bad attempt.
+ */
 public class ShellNetworkConnector implements NetworkConnector {
 
     private final ShellRunner shell;

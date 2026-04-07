@@ -41,10 +41,12 @@ public enum Platform {
         }
     }
 
+    /** Creates a platform-appropriate {@link NetworkScanner} backed by the given shell runner. */
     public NetworkScanner newScanner(ShellRunner shell) {
         return resolve(ScannerProvider.class).create(shell);
     }
 
+    /** Creates a platform-appropriate {@link NetworkConnector} backed by the given shell runner and logger. */
     public NetworkConnector newConnector(ShellRunner shell, Logger logger) {
         return new ShellNetworkConnector(shell, this, logger);
     }

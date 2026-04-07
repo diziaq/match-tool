@@ -9,8 +9,28 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * Lightweight logger with three output modes: console-only, file-only, or both simultaneously.
+ *
+ * <p>Every entry written to a file is prefixed with an ISO-8601 timestamp
+ * ({@code yyyy-MM-dd'T'HH:mm:ss.SSS}). File-backed instances implement {@link AutoCloseable} and
+ * should be used in try-with-resources blocks to ensure the underlying writer is flushed and closed.
+ *
+ * <pre>{@code
+ * try (var log = new Logger(Logger.Output.FILE, false, "logs/run.log")) {
+ *     log.info("started");
+ * }
+ * }</pre>
+ *
+ * <p>Debug messages are suppressed unless {@code debugEnabled} is {@code true}. Error messages
+ * always go to {@code stderr} (and to the file when a file is open).
+ */
 public class Logger implements AutoCloseable {
 
+    /**
+     * Controls where log output is directed.
+     * {@code FILE} and {@code BOTH} require a file path at construction time.
+     */
     public enum Output { CONSOLE, FILE, BOTH }
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
@@ -42,23 +62,27 @@ public class Logger implements AutoCloseable {
         this.fileWriter = openWriter(filePath);
     }
 
+    /** Writes {@code message} to the configured output(s), followed by a newline. */
     public void info(String message) {
         toConsole(message);
         toFile(message);
     }
 
+    /** Writes {@code message} to the console <em>without</em> a trailing newline. No-op for file-only output. */
     public void print(String message) {
         if (output == Output.CONSOLE || output == Output.BOTH) {
             System.out.print(message);
         }
     }
 
+    /** Writes a {@code [DEBUG]} prefixed message. Suppressed entirely when {@code debugEnabled} is {@code false}. */
     public void debug(String message) {
         if (!debugEnabled) return;
         toConsole("[DEBUG] " + message);
         toFile("[DEBUG] " + message);
     }
 
+    /** Writes {@code message} to {@code stderr} and, with an {@code [ERROR]} prefix, to the file. */
     public void error(String message) {
         if (output == Output.CONSOLE || output == Output.BOTH) {
             System.err.println(message);

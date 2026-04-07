@@ -1,5 +1,6 @@
 package org.example.wifi;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -9,58 +10,78 @@ import static org.assertj.core.api.Assertions.*;
 
 class TestNetwork {
 
-    @Test
-    void getters() {
-        var net = new Network("HomeWiFi", "-45 dBm");
+    @Nested
+    class RecordContract {
 
-        assertThat(net.ssid()).isEqualTo("HomeWiFi");
-        assertThat(net.signal()).isEqualTo("-45 dBm");
+        @Test
+        void getters() {
+            var net = new Network("HomeWiFi", "-45 dBm");
+
+            assertThat(net.ssid()).isEqualTo("HomeWiFi");
+            assertThat(net.signal()).isEqualTo("-45 dBm");
+        }
+
+        @Test
+        void equalityByValue() {
+            assertThat(new Network("A", "-50 dBm")).isEqualTo(new Network("A", "-50 dBm"));
+        }
+
+        @Test
+        void inequalityWhenSsidDiffers() {
+            assertThat(new Network("A", "-50 dBm")).isNotEqualTo(new Network("B", "-50 dBm"));
+        }
+
+        @Test
+        void inequalityWhenSignalDiffers() {
+            assertThat(new Network("A", "-50 dBm")).isNotEqualTo(new Network("A", "-60 dBm"));
+        }
     }
 
-    @Test
-    void equalityByValue() {
-        assertThat(new Network("A", "-50 dBm")).isEqualTo(new Network("A", "-50 dBm"));
-    }
+    @Nested
+    class Ordering {
 
-    @Test
-    void inequalityWhenSsidDiffers() {
-        assertThat(new Network("A", "-50 dBm")).isNotEqualTo(new Network("B", "-50 dBm"));
-    }
+        @Test
+        void compareToIsCaseInsensitive() {
+            var a = new Network("apple", "-50 dBm");
+            var b = new Network("Apple", "-40 dBm");
 
-    @Test
-    void inequalityWhenSignalDiffers() {
-        assertThat(new Network("A", "-50 dBm")).isNotEqualTo(new Network("A", "-60 dBm"));
-    }
+            assertThat(a.compareTo(b)).isZero();
+        }
 
-    @Test
-    void compareToIsCaseInsensitive() {
-        var a = new Network("apple", "-50 dBm");
-        var b = new Network("Apple", "-40 dBm");
+        @Test
+        void compareToOrdering() {
+            var alpha = new Network("Alpha", "-50 dBm");
+            var beta  = new Network("Beta",  "-40 dBm");
+            var zebra = new Network("Zebra", "-30 dBm");
 
-        assertThat(a.compareTo(b)).isZero();
-    }
+            assertThat(alpha.compareTo(beta)).isNegative();
+            assertThat(beta.compareTo(zebra)).isNegative();
+            assertThat(zebra.compareTo(alpha)).isPositive();
+        }
 
-    @Test
-    void compareToOrdering() {
-        var alpha = new Network("Alpha", "-50 dBm");
-        var beta  = new Network("Beta",  "-40 dBm");
-        var zebra = new Network("Zebra", "-30 dBm");
+        @Test
+        void sortingWithCompareTo() {
+            var nets = new ArrayList<>(List.of(
+                new Network("Zebra", "-30 dBm"),
+                new Network("alpha", "-50 dBm"),
+                new Network("Beta",  "-40 dBm")
+            ));
+            nets.sort(null);
 
-        assertThat(alpha.compareTo(beta)).isNegative();
-        assertThat(beta.compareTo(zebra)).isNegative();
-        assertThat(zebra.compareTo(alpha)).isPositive();
-    }
+            assertThat(nets).extracting(Network::ssid)
+                .containsExactly("alpha", "Beta", "Zebra");
+        }
 
-    @Test
-    void sortingWithCompareTo() {
-        var nets = new ArrayList<>(List.of(
-            new Network("Zebra", "-30 dBm"),
-            new Network("alpha", "-50 dBm"),
-            new Network("Beta",  "-40 dBm")
-        ));
-        nets.sort(null);
+        // Opinion: case-insensitive ordering means "Office" and "office" sort as equal neighbours;
+        // the relative order between them is unspecified, but both must appear adjacent in a sorted
+        // list — deduplicated() relies on this to collapse them with a TreeMap.
+        @Test
+        void sameNameDifferentCase_sortsAsEqual() {
+            var lower = new Network("office", "-60 dBm");
+            var upper = new Network("Office", "-40 dBm");
 
-        assertThat(nets).extracting(Network::ssid)
-            .containsExactly("alpha", "Beta", "Zebra");
+            assertThat(lower.compareTo(upper)).isZero();
+            assertThat(upper.compareTo(lower)).isZero();
+        }
     }
 }

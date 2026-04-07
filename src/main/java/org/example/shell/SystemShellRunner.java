@@ -4,6 +4,12 @@ import org.example.io.Logger;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
+/**
+ * {@link ShellRunner} that delegates to {@code /bin/sh -c}. Stdout and stderr streams are drained
+ * concurrently to avoid blocking on full pipe buffers. Stderr is forwarded to
+ * {@link Logger#error}; the return value contains only stdout. Debug logging records the command,
+ * exit code, and stdout character count.
+ */
 public class SystemShellRunner implements ShellRunner {
 
     private final Logger logger;

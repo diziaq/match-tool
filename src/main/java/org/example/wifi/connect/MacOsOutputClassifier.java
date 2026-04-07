@@ -1,5 +1,18 @@
 package org.example.wifi.connect;
 
+/**
+ * Classifies {@code networksetup} output into typed {@link ConnectOutcome} values.
+ *
+ * <ul>
+ *   <li>Blank output → {@link ConnectOutcome.Connected} (networksetup is silent on success)</li>
+ *   <li>"Could not find network" → {@link ConnectOutcome.NetworkNotFound}</li>
+ *   <li>"Failed to join network" + "apple80211API" → {@link ConnectOutcome.AssociationFailed}
+ *       (security mismatch, e.g. wrong auth mode)</li>
+ *   <li>"Failed to join network" (other) → {@link ConnectOutcome.WrongPassword}
+ *       (e.g. errors -3925, -3958, -3970, -528342014 with "tmpErr")</li>
+ *   <li>Anything else → {@link ConnectOutcome.UnknownFailure}</li>
+ * </ul>
+ */
 class MacOsOutputClassifier implements OutputClassifier {
 
     @Override

@@ -17,6 +17,19 @@ import org.example.wifi.connect.ConnectOutcome;
 import org.example.wifi.connect.NetworkConnector;
 import org.example.wifi.scan.NetworkScanner;
 
+/**
+ * Application entry point. Dispatches to one of four operational modes based on {@code --mode}:
+ *
+ * <ul>
+ *   <li><b>1 – scan:</b> Prints all visible WiFi networks with signal strength.</li>
+ *   <li><b>2 – connect:</b> Interactive prompt for SSID and password; prints the typed outcome.</li>
+ *   <li><b>3 – batch match:</b> Cross-product password-spray — reads SSIDs from {@code --left} and
+ *       passwords from {@code --right}, tries every combination, logs matches to timestamped files
+ *       under {@code logs/}. Use {@code --skip N} to resume a password list from offset N.</li>
+ * </ul>
+ *
+ * <p>Add {@code --debug} to enable verbose shell logging via {@link org.example.io.Logger}.
+ */
 public class Main {
 
     private static final DateTimeFormatter LOG_FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
