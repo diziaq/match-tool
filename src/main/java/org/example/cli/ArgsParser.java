@@ -10,17 +10,23 @@ import java.util.function.Function;
 /**
  * Builder-style parser for {@code --name value} command-line arguments.
  *
+ * <p>Registered definitions form the "intention" config — they declare every parameter's name,
+ * type, parser, and default. {@link #parse} only tokenises and validates structure (unknown
+ * params, missing required params, duplicates). Actual value parsing is deferred to
+ * {@link ParsedArgs#get}, which evaluates lazily on first access.
+ *
  * <pre>{@code
  * ParsedArgs args = new ArgsParser()
  *     .registerRequired("input", Path.class,    ArgsParser.PATH)
  *     .registerOptional("count", Integer.class, ArgsParser.INTEGER, 10)
  *     .parse(argv);
  *
- * Path  input = args.get("input");
- * int   count = args.get("count");
+ * Path  input = args.get("input");   // parsed here
+ * int   count = args.get("count");   // parsed here
  * }</pre>
  *
- * All per-argument failures are collected and reported together in {@link ParseException}.
+ * Per-argument <em>structural</em> failures (unknown token, missing required) are collected and
+ * reported together in {@link ParseException}. Type/value failures surface at {@code get()} time.
  */
 public final class ArgsParser {
 
@@ -29,7 +35,7 @@ public final class ArgsParser {
     /** Parser for {@link Integer} values. */
     public static final Function<String, Integer> INTEGER = new IntegerParser();
 
-    /** Thrown when {@link #parse} encounters one or more errors; the message lists all failures. */
+    /** Thrown when {@link #parse} encounters one or more structural errors; the message lists all failures. */
     public static final class ParseException extends Exception {
         ParseException(String message) {
             super(message);
@@ -38,19 +44,23 @@ public final class ArgsParser {
 
     private final Map<String, ArgDef<?>> defs = new LinkedHashMap<>();
 
-    /** Registers a mandatory parameter. {@link #parse} fails if it is absent or unparseable. */
+    /** Registers a mandatory parameter. {@link #parse} fails if it is absent from the raw input. */
     public <T> ArgsParser registerRequired(String name, Class<T> type, Function<String, T> parse) {
         defs.put(name, new ArgDef<>(name, type, parse, true, null));
         return this;
     }
 
-    /** Registers an optional parameter. {@link #parse} returns {@code defaultValue} if it is absent. */
+    /** Registers an optional parameter. {@link ParsedArgs#get} returns {@code defaultValue} if it is absent. */
     public <T> ArgsParser registerOptional(String name, Class<T> type, Function<String, T> parse, T defaultValue) {
         defs.put(name, new ArgDef<>(name, type, parse, false, defaultValue));
         return this;
     }
 
-    /** Parses {@code args}, collecting all failures before throwing. */
+    /**
+     * Tokenises {@code args} and validates structure only (unknown params, missing required,
+     * duplicates, malformed tokens). Does <b>not</b> run type parsers — that happens lazily
+     * inside {@link ParsedArgs#get}.
+     */
     public ParsedArgs parse(String[] args) throws ParseException {
         List<String> errors = new ArrayList<>();
 
@@ -62,21 +72,12 @@ public final class ArgsParser {
             }
         }
 
-        Map<String, Object> values = new LinkedHashMap<>();
         for (var entry : defs.entrySet()) {
-            String   name = entry.getKey();
-            ArgDef<?> def = entry.getValue();
+            String    name = entry.getKey();
+            ArgDef<?> def  = entry.getValue();
 
-            if (raw.containsKey(name)) {
-                try {
-                    values.put(name, def.applyParse(raw.get(name)));
-                } catch (Exception e) {
-                    errors.add("--" + name + " (" + def.type().getSimpleName() + "): " + e.getMessage());
-                }
-            } else if (def.required()) {
+            if (!raw.containsKey(name) && def.required()) {
                 errors.add("--" + name + ": required but not provided");
-            } else {
-                values.put(name, def.defaultValue());
             }
         }
 
@@ -84,7 +85,7 @@ public final class ArgsParser {
             throw new ParseException(String.join("\n", errors));
         }
 
-        return new ParsedArgs(values, defs.keySet());
+        return new ParsedArgs(raw, defs);
     }
 
     private static Map<String, String> tokenize(String[] args, List<String> errors) {

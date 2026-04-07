@@ -89,7 +89,7 @@ class TestArgsParser {
     }
 
     @Nested
-    class ValidationErrors {
+    class StructuralErrors {
 
         @Test
         void throwsOnUnknownParam() {
@@ -109,16 +109,6 @@ class TestArgsParser {
                     .parse(new String[]{}))
                 .isInstanceOf(ArgsParser.ParseException.class)
                 .hasMessageContaining("--input");
-        }
-
-        @Test
-        void throwsOnInvalidInteger() {
-            assertThatThrownBy(() ->
-                new ArgsParser()
-                    .registerRequired("count", Integer.class, ArgsParser.INTEGER)
-                    .parse(new String[]{"--count", "not-a-number"}))
-                .isInstanceOf(ArgsParser.ParseException.class)
-                .hasMessageContaining("--count");
         }
 
         @Test
@@ -158,46 +148,132 @@ class TestArgsParser {
                     .parse(new String[]{"count", "5"}))
                 .isInstanceOf(ArgsParser.ParseException.class);
         }
+    }
+
+    @Nested
+    class LazyEvaluation {
 
         @Test
-        void throwsOnNonExistentPath() {
+        void malformedParamDoesNotFailAtParseTime() throws Exception {
+            // parse() succeeds even with an invalid integer — no parser runs yet
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("count", Integer.class, ArgsParser.INTEGER)
+                .parse(new String[]{"--count", "not-a-number"});
+
+            // only fails when accessed
+            assertThatThrownBy(() -> result.get("count"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("--count")
+                .hasMessageContaining("Available parameters");
+        }
+
+        @Test
+        void nonExistentPathDoesNotFailAtParseTime() throws Exception {
             Path missing = tempDir.resolve("nonexistent.csv");
 
-            assertThatThrownBy(() ->
-                new ArgsParser()
-                    .registerRequired("input", Path.class, ArgsParser.PATH)
-                    .parse(new String[]{"--input", missing.toString()}))
-                .isInstanceOf(ArgsParser.ParseException.class)
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("input", Path.class, ArgsParser.PATH)
+                .parse(new String[]{"--input", missing.toString()});
+
+            assertThatThrownBy(() -> result.get("input"))
+                .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("--input");
         }
 
         @Test
-        void collectsAllErrorsAndReportsAtOnce() {
-            assertThatThrownBy(() ->
-                new ArgsParser()
-                    .registerRequired("count",  Integer.class, ArgsParser.INTEGER)
-                    .registerRequired("factor", Integer.class, ArgsParser.INTEGER)
-                    .registerRequired("level",  Integer.class, ArgsParser.INTEGER)
-                    .parse(new String[]{"--count", "bad", "--factor", "also-bad"}))
-                .isInstanceOf(ArgsParser.ParseException.class)
-                .hasMessageContaining("--count")
-                .hasMessageContaining("--factor")
-                .hasMessageContaining("--level");
+        void unusedMalformedParamNeverFails() throws Exception {
+            // "count" is malformed but we never call get("count")
+            ParsedArgs result = new ArgsParser()
+                .registerOptional("count", Integer.class, ArgsParser.INTEGER, 0)
+                .registerOptional("name", String.class, s -> s, "default")
+                .parse(new String[]{"--count", "bad", "--name", "hello"});
+
+            // only access the valid param — no error
+            assertThat(result.<String>get("name")).isEqualTo("hello");
         }
 
         @Test
-        void customValidationViaParseFunction() {
-            assertThatThrownBy(() ->
-                new ArgsParser()
-                    .registerRequired("port", Integer.class, raw -> {
-                        int n = Integer.parseInt(raw);
-                        if (n < 1 || n > 65535) throw new IllegalArgumentException("must be 1–65535");
-                        return n;
-                    })
-                    .parse(new String[]{"--port", "99999"}))
-                .isInstanceOf(ArgsParser.ParseException.class)
+        void resolvedValueIsCachedOnSubsequentGets() throws Exception {
+            int[] callCount = {0};
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("count", Integer.class, raw -> {
+                    callCount[0]++;
+                    return Integer.parseInt(raw);
+                })
+                .parse(new String[]{"--count", "42"});
+
+            result.get("count");
+            result.get("count");
+            result.get("count");
+
+            assertThat(callCount[0]).isEqualTo(1);
+        }
+
+        @Test
+        void multipleErrorsReportedIndependentlyPerGet() throws Exception {
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("count",  Integer.class, ArgsParser.INTEGER)
+                .registerRequired("factor", Integer.class, ArgsParser.INTEGER)
+                .parse(new String[]{"--count", "bad", "--factor", "also-bad"});
+
+            assertThatThrownBy(() -> result.get("count"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("--count");
+
+            assertThatThrownBy(() -> result.get("factor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("--factor");
+        }
+
+        @Test
+        void customValidationViaParseFunction() throws Exception {
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("port", Integer.class, raw -> {
+                    int n = Integer.parseInt(raw);
+                    if (n < 1 || n > 65535) throw new IllegalArgumentException("must be 1–65535");
+                    return n;
+                })
+                .parse(new String[]{"--port", "99999"});
+
+            assertThatThrownBy(() -> result.get("port"))
+                .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("--port")
                 .hasMessageContaining("must be 1–65535");
+        }
+    }
+
+    @Nested
+    class UsageGuide {
+
+        @Test
+        void errorIncludesAllRegisteredParams() throws Exception {
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("mode",  Integer.class, ArgsParser.INTEGER)
+                .registerOptional("skip",  Integer.class, ArgsParser.INTEGER, 0)
+                .registerOptional("debug", Boolean.class, Boolean::parseBoolean, false)
+                .parse(new String[]{"--mode", "bad"});
+
+            assertThatThrownBy(() -> result.get("mode"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Available parameters")
+                .hasMessageContaining("--mode")
+                .hasMessageContaining("--skip")
+                .hasMessageContaining("--debug")
+                .hasMessageContaining("required")
+                .hasMessageContaining("optional");
+        }
+
+        @Test
+        void unknownParamGetIncludesGuide() throws Exception {
+            ParsedArgs result = new ArgsParser()
+                .registerRequired("count", Integer.class, ArgsParser.INTEGER)
+                .parse(new String[]{"--count", "3"});
+
+            assertThatThrownBy(() -> result.get("unknown"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown parameter: --unknown")
+                .hasMessageContaining("Available parameters")
+                .hasMessageContaining("--count");
         }
     }
 
