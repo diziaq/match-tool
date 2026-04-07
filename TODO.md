@@ -1,11 +1,11 @@
-done 1. write javadocs for all classes explaining why and how to use; test classes contatinin lot of code restructure to use nested classes for example (BaseCaeses CornerCases Failures), and anything on your      
+DONE 1. write javadocs for all classes explaining why and how to use; test classes contatinin lot of code restructure to use nested classes for example (BaseCaeses CornerCases Failures), and anything on your      
 oppinion in each case   
 
-2. for matcher create a wrappring coordinator with varying behavior
+2. for matcher create a wrappring coordinator with configurable behavior
    e.g. stop one on first match / stop all on first match / exclude item on Nth failure / etc.
    if result is undefined can retry M times
 
-done 3. The ConnectOutcome should be generified to MatchOutcome(FAILURE, MATCH, MISMATCH, ???anything else needed???)
+DONE 3. The ConnectOutcome should be generified to MatchOutcome(FAILURE, MATCH, MISMATCH, ???anything else needed???)
 
 4. investigate idea how to vary the behaviour 
 and make left-right in-out-switch places of the loops, but preserve the behavior in ` do_match(l, r)`
@@ -19,7 +19,7 @@ left.forEach(L -> {
 ```
 
 
-5. Network class should calculate network accessibility based on the signal strength - and we'll just exclude certain from the count.
+DONE 5. Network class should calculate network accessibility based on the signal strength - and we'll just exclude certain from the count.
 the signal strength represented by Strength sealed interface as Best, Normal, Weak - each storing integer representing the signal - the rule of distinction is builit into the Network factory method
 
 6. the matcher can additionally log-debug the current signal strength for examined network
