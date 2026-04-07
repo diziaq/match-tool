@@ -5,14 +5,12 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Scanner;
 import org.example.cli.ArgsParser;
 import org.example.cli.ParsedArgs;
 import org.example.io.Logger;
+import org.example.matcher.MatchCoordinator;
 import org.example.matcher.MatchOutcome;
 import org.example.matcher.MatchPredicate;
-import org.example.matcher.MatchCoordinator;
-import org.example.matcher.PairMatcher;
 import org.example.shell.ShellRunner;
 import org.example.shell.SystemShellRunner;
 import org.example.wifi.Network;
@@ -25,8 +23,7 @@ import org.example.wifi.scan.NetworkScanner;
  *
  * <ul>
  *   <li><b>1 – scan:</b> Prints all visible WiFi networks with signal strength.</li>
- *   <li><b>2 – connect:</b> Interactive prompt for SSID and password; prints the typed outcome.</li>
- *   <li><b>3 – batch match:</b> Cross-product password-spray — reads SSIDs from {@code --left} and
+ *   <li><b>2 – batch match:</b> Cross-product password-spray — reads SSIDs from {@code --left} and
  *       passwords from {@code --right}, tries every combination, logs matches to timestamped files
  *       under {@code logs/}. Use {@code --skip N} to resume a password list from offset N.</li>
  * </ul>
@@ -43,7 +40,7 @@ public class Main {
             cli = new ArgsParser()
                       .registerRequired("mode", Integer.class, raw -> {
                           int m = Integer.parseInt(raw);
-                          if (m < 1 || m > 4) throw new IllegalArgumentException("must be 1..3");
+                          if (m < 1 || m > 2) throw new IllegalArgumentException("must be 1..2");
                           return m;
                       })
                       .registerOptional("left", Path.class, ArgsParser.PATH, null)
@@ -81,24 +78,10 @@ public class Main {
                 networks.forEach(n -> logger.info(String.format("  %-30s %s", n.ssid(), n.strength())));
             }
             case 2 -> {
-                var input = new Scanner(System.in);
-                logger.print("SSID: ");
-                String ssid = input.nextLine();
-                logger.print("Password: ");
-                String password = input.nextLine();
-                String message = switch (connector.test(Network.of(ssid), new Password(password))) {
-                    case MatchOutcome.Match()        -> "Connected to: " + ssid;
-                    case MatchOutcome.Unavailable()  -> "Network not found: " + ssid;
-                    case MatchOutcome.Mismatch()     -> "Wrong password for: " + ssid;
-                    case MatchOutcome.Failure(var r) -> r;
-                };
-                logger.info(message);
-            }
-            case 3 -> {
                 requireFile(left, "left", logger);
                 requireFile(right, "right", logger);
                 List<Network> lefts = Files.readAllLines(left).stream()
-                    .map(Network::of).toList();
+                                           .map(Network::of).toList();
                 String prefix = LocalDateTime.now().format(LOG_FILE_TIMESTAMP);
                 try (var traceLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_trace.log");
                      var successLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_success.log")) {
