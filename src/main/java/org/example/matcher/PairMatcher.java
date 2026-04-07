@@ -1,7 +1,6 @@
 package org.example.matcher;
 
 import java.util.Collection;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -14,10 +13,10 @@ import java.util.stream.Stream;
  * from a stream that should not be revisited (e.g. a lazy password file).
  *
  * <pre>{@code
- * new PairMatcher<String, String>().match(
- *     ssids,
+ * new PairMatcher<Network, String>().match(
+ *     networks,
  *     Files.lines(passwordFile),
- *     (ssid, password) -> connector.tryConnect(ssid, password) instanceof Connected,
+ *     connector,          // NetworkConnector IS-A MatchPredicate<Network, String>
  *     match -> log.info("Found: " + match)
  * );
  * }</pre>
@@ -26,23 +25,23 @@ public class PairMatcher<L, R> {
 
     /**
      * For every {@code right} in {@code rights}, tests it against every {@code left} in
-     * {@code lefts}. When {@code predicate} returns {@code true}, calls {@code onMatch} with the
-     * matching pair.
+     * {@code lefts}. When {@code predicate} returns {@link MatchOutcome.Match}, calls
+     * {@code onMatch} with the matched pair. All other outcomes are silently skipped.
      *
      * @param lefts     the collection of left items (iterated once per right)
      * @param rights    the stream of right items (consumed exactly once)
-     * @param predicate returns {@code true} when a pair should be reported
-     * @param onMatch   called for every pair where the predicate is satisfied
+     * @param predicate returns a {@link MatchOutcome} for each pair
+     * @param onMatch   called for every pair where the predicate returns {@link MatchOutcome.Match}
      */
     public void match(
         Collection<L> lefts,
         Stream<R> rights,
-        BiFunction<L, R, Boolean> predicate,
+        MatchPredicate<L, R> predicate,
         Consumer<Match<L, R>> onMatch
     ) {
         rights.forEach(right ->
             lefts.forEach(left -> {
-                if (predicate.apply(left, right)) {
+                if (predicate.test(left, right) instanceof MatchOutcome.Match) {
                     onMatch.accept(new Match<>(left, right));
                 }
             })

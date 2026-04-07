@@ -4,6 +4,7 @@ import org.example.Platform;
 import org.example.io.Logger;
 import org.example.matcher.MatchOutcome;
 import org.example.shell.ShellRunner;
+import org.example.wifi.Network;
 
 /**
  * {@link NetworkConnector} that delegates to a {@link ShellRunner}.
@@ -28,7 +29,8 @@ public class ShellNetworkConnector implements NetworkConnector {
     }
 
     @Override
-    public MatchOutcome tryConnect(String ssid, String password) {
+    public MatchOutcome test(Network network, String password) {
+        String ssid = network.ssid();
         logger.debug("Attempting connection to '" + ssid + "'");
         try {
             String cmd = connectCommand.build(ssid, password);

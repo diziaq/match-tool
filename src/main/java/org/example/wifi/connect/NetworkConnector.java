@@ -1,18 +1,32 @@
 package org.example.wifi.connect;
 
 import org.example.matcher.MatchOutcome;
+import org.example.matcher.MatchPredicate;
+import org.example.wifi.Network;
 
 /**
- * Attempts to connect to a WiFi network and returns a typed outcome.
+ * Attempts to connect to a WiFi network and returns a typed {@link MatchOutcome}.
  *
- * <p>Implementations must never throw; all failures — including unexpected exceptions — must be
- * returned as {@link MatchOutcome.Failure}.
+ * <p>Extends {@link MatchPredicate}{@code <Network, String>} so that a connector instance can be
+ * passed directly as the predicate in a {@link org.example.matcher.PairMatcher} run, without any
+ * adapter lambda:
+ *
+ * <pre>{@code
+ * new PairMatcher<Network, String>().match(networks, passwords, connector, onMatch);
+ * }</pre>
+ *
+ * <p>Implementations must never throw; all failures must be returned as
+ * {@link MatchOutcome.Failure}.
  */
-public interface NetworkConnector {
+public interface NetworkConnector extends MatchPredicate<Network, String> {
+
     /**
-     * @param ssid     the network name to connect to
+     * Attempts to join {@code network} using {@code password}.
+     *
+     * @param network  the target network (SSID taken from {@link Network#ssid()})
      * @param password the WPA/WPA2 passphrase (may be empty for open networks)
-     * @return a typed {@link MatchOutcome}; never {@code null}
+     * @return a non-null {@link MatchOutcome}
      */
-    MatchOutcome tryConnect(String ssid, String password);
+    @Override
+    MatchOutcome test(Network network, String password);
 }
