@@ -31,3 +31,6 @@ the signal strength represented by Strength sealed interface as Best, Normal, We
 8. additionally check the output when connecting to networks: (second priority but may be interesting)
 A. without password Like PullmanGuest; 
 B. without password but with auth page like "Tbilisi Loves You"
+
+9. remove all system exit form Main - this can be optionally added as effect aroung the args accessor - exit on missed required params, ubt it should be pluggable behaviour.
+10. declarative approach to setting args schema from declarative file 
