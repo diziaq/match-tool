@@ -1,15 +1,3 @@
-Axis Towers Business Lobby
-darbazi
-SILK_F1A914
-TP-LINK_AP_B43A
-Galaxy S24 Ultra FC82
-devex-dev
-devex-employee
-devex-employee-teap
-devex-mobile
-DIRECT-29-HP
-MAGTI
-Nina
-Rico_TOP
-SILK_38202B
-wifi4
+SILK_306EEC
+Tite
+TP-Link_E1D4

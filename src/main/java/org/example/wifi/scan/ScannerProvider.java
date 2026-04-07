@@ -10,8 +10,8 @@ public interface ScannerProvider extends PlatformDependent {
 
     static ScannerProvider of(Platform platform) {
         return switch (platform) {
-            case MACOS -> MacOsNetworkScanner::new;
-            case LINUX -> LinuxNetworkScanner::new;
+            case MACOS -> new MacOsScannerProvider();
+            case LINUX -> new LinuxScannerProvider();
         };
     }
 }

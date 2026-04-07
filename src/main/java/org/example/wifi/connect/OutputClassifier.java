@@ -9,20 +9,8 @@ public interface OutputClassifier extends PlatformDependent {
 
     static OutputClassifier of(Platform platform) {
         return switch (platform) {
-            case MACOS -> OutputClassifier::classifyMac;
-            case LINUX -> output -> output.toLowerCase().contains("successfully")
-                ? new ConnectOutcome.Connected()
-                : new ConnectOutcome.UnknownFailure(output);
+            case MACOS -> new MacOsOutputClassifier();
+            case LINUX -> new LinuxOutputClassifier();
         };
-    }
-
-    private static ConnectOutcome classifyMac(String output) {
-        if (output.isBlank())                          return new ConnectOutcome.Connected();
-        if (output.contains("Could not find network")) return new ConnectOutcome.NetworkNotFound();
-        if (output.contains("Failed to join network")) {
-            if (output.contains("apple80211API"))      return new ConnectOutcome.AssociationFailed();
-            return new ConnectOutcome.WrongPassword();
-        }
-        return new ConnectOutcome.UnknownFailure(output);
     }
 }
