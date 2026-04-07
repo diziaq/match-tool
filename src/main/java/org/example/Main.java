@@ -11,6 +11,7 @@ import org.example.cli.ParsedArgs;
 import org.example.io.Logger;
 import org.example.matcher.MatchOutcome;
 import org.example.matcher.MatchPredicate;
+import org.example.matcher.MatchCoordinator;
 import org.example.matcher.PairMatcher;
 import org.example.shell.ShellRunner;
 import org.example.shell.SystemShellRunner;
@@ -106,7 +107,7 @@ public class Main {
                         traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password.value(), network.ssid()));
                         return outcome;
                     };
-                    new PairMatcher<Network, Password>().match(
+                    MatchCoordinator.<Network, Password>effective().match(
                         lefts,
                         Files.lines(right).skip(skip).map(Password::new),
                         tracingPredicate,
