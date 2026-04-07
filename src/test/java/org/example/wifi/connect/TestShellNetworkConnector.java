@@ -3,6 +3,7 @@ package org.example.wifi.connect;
 import org.example.Platform;
 import org.example.io.Logger;
 import org.example.matcher.MatchOutcome;
+import org.example.wifi.Network;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -34,6 +35,11 @@ class TestShellNetworkConnector {
         return new Logger(Logger.Output.CONSOLE, false);
     }
 
+    /** Wraps a bare SSID string into a Network as the connector now requires. */
+    private static Network net(String ssid) {
+        return new Network(ssid, "");
+    }
+
     @Nested
     class MacBehaviour {
 
@@ -41,7 +47,7 @@ class TestShellNetworkConnector {
         void returnsMatchWhenOutputBlank() {
             var connector = new ShellNetworkConnector(cmd -> "", Platform.MACOS, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "secret"))
+            assertThat(connector.test(net("HomeWiFi"), "secret"))
                 .isInstanceOf(MatchOutcome.Match.class);
         }
 
@@ -51,7 +57,7 @@ class TestShellNetworkConnector {
                 cmd -> "Could not find network HomeWiFi.",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "pass"))
+            assertThat(connector.test(net("HomeWiFi"), "pass"))
                 .isInstanceOf(MatchOutcome.Unavailable.class);
         }
 
@@ -61,7 +67,7 @@ class TestShellNetworkConnector {
                 cmd -> "Failed to join network HomeWiFi.\nError: -3925  The operation couldn't be completed. tmpErr",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "wrong"))
+            assertThat(connector.test(net("HomeWiFi"), "wrong"))
                 .isInstanceOf(MatchOutcome.Mismatch.class);
         }
 
@@ -71,7 +77,7 @@ class TestShellNetworkConnector {
                 cmd -> "Failed to join network HomeWiFi.\nError: -3912  The operation couldn't be completed. (com.apple.wifi.apple80211API.error error -3912.)",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "pass"))
+            assertThat(connector.test(net("HomeWiFi"), "pass"))
                 .isInstanceOf(MatchOutcome.Failure.class);
         }
 
@@ -81,18 +87,18 @@ class TestShellNetworkConnector {
                 cmd -> "some unexpected error",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "pass"))
+            assertThat(connector.test(net("HomeWiFi"), "pass"))
                 .isInstanceOf(MatchOutcome.Failure.class);
         }
 
         @Test
-        void tryConnect_usesNetworksetupCommand() {
+        void test_usesNetworkSsidInCommand() {
             String[] captured = new String[1];
             var connector = new ShellNetworkConnector(
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.tryConnect("MyNet", "pass");
+            connector.test(net("MyNet"), "pass");
 
             assertThat(captured[0]).contains("networksetup").contains("-setairportnetwork");
         }
@@ -107,7 +113,7 @@ class TestShellNetworkConnector {
                 cmd -> "Device 'wlan0' successfully connected.",
                 Platform.LINUX, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "secret"))
+            assertThat(connector.test(net("HomeWiFi"), "secret"))
                 .isInstanceOf(MatchOutcome.Match.class);
         }
 
@@ -117,7 +123,7 @@ class TestShellNetworkConnector {
                 cmd -> "Error: Connection failed.",
                 Platform.LINUX, silentLogger());
 
-            assertThat(connector.tryConnect("HomeWiFi", "wrong"))
+            assertThat(connector.test(net("HomeWiFi"), "wrong"))
                 .isInstanceOf(MatchOutcome.Failure.class);
         }
 
@@ -127,18 +133,18 @@ class TestShellNetworkConnector {
                 cmd -> "SUCCESSFULLY connected",
                 Platform.LINUX, silentLogger());
 
-            assertThat(connector.tryConnect("Net", "pass"))
+            assertThat(connector.test(net("Net"), "pass"))
                 .isInstanceOf(MatchOutcome.Match.class);
         }
 
         @Test
-        void tryConnect_usesNmcliCommand() {
+        void test_usesNmcliCommand() {
             String[] captured = new String[1];
             var connector = new ShellNetworkConnector(
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.LINUX, silentLogger());
 
-            connector.tryConnect("MyNet", "pass");
+            connector.test(net("MyNet"), "pass");
 
             assertThat(captured[0]).contains("nmcli").contains("password");
         }
@@ -153,7 +159,7 @@ class TestShellNetworkConnector {
                 cmd -> { throw new RuntimeException("network down"); },
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.tryConnect("Net", "pass"))
+            assertThat(connector.test(net("Net"), "pass"))
                 .isInstanceOf(MatchOutcome.Failure.class);
         }
 
@@ -163,7 +169,7 @@ class TestShellNetworkConnector {
                 cmd -> { throw new RuntimeException("network down"); },
                 Platform.MACOS, silentLogger());
 
-            MatchOutcome outcome = connector.tryConnect("Net", "pass");
+            MatchOutcome outcome = connector.test(net("Net"), "pass");
 
             assertThat(((MatchOutcome.Failure) outcome).reason()).contains("network down");
         }
@@ -175,7 +181,7 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.tryConnect("O'Brien's WiFi", "pass");
+            connector.test(net("O'Brien's WiFi"), "pass");
 
             assertThat(captured[0]).contains("O'\\''Brien");
         }
@@ -187,9 +193,21 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.tryConnect("Net", "it's secret");
+            connector.test(net("Net"), "it's secret");
 
             assertThat(captured[0]).contains("it'\\''s secret");
+        }
+
+        @Test
+        void networkSsid_isUsedInCommand() {
+            String[] captured = new String[1];
+            var connector = new ShellNetworkConnector(
+                cmd -> { captured[0] = cmd; return ""; },
+                Platform.MACOS, silentLogger());
+
+            connector.test(new Network("TargetSSID", "-45 dBm"), "pass");
+
+            assertThat(captured[0]).contains("TargetSSID");
         }
     }
 }

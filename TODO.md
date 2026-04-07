@@ -20,6 +20,7 @@ left.forEach(L -> {
 
 
 5. Network class should calculate network accessibility based on the signal strength - and we'll just exclude certain from the count.
+the signal strength represented by Strength sealed interface as Best, Normal, Weak - each storing integer representing the signal - the rule of distinction is builit into the Network factory method
 
 6. the matcher can additionally log-debug the current signal strength for examined network
 
