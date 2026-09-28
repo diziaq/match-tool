@@ -1,0 +1,16 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+    <servers>
+        <server>
+            <id>nexus-maven-public</id>
+            <username>${env.NEXUS_USERNAME}</username>
+            <password>${env.NEXUS_PASSWORD}</password>
+        </server>
+    </servers>
+    <mirrors>
+        <mirror>
+            <id>nexus-maven-public</id>
+            <mirrorOf>*</mirrorOf>
+            <url>https://nexus.infra.wktodev.net/repository/maven-public</url>
+        </mirror>
+    </mirrors>
+</settings>
