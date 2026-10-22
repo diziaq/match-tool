@@ -95,6 +95,9 @@ public final class WifiPlugin implements Plugin {
         Path passwordsPath = requireFile(args.get("passwords"), "passwords");
         int skip = args.get("skip");
 
+        logger.info("Started batch match: networks=%s, passwords=%s, skip=%d, budget=%d"
+            .formatted(networksPath, passwordsPath, skip, parallelismBudget()));
+
         NetworkConnector connector = platform.newConnector(shell, logger);
         Source<Network> networks = new LinesFileSource(networksPath).map(Network::of);
         Source<String> passwordLines = new LinesFileSource(passwordsPath);
