@@ -14,14 +14,6 @@ cd "$SCRIPT_DIR"
 java --version
 mvn clean -s settings.xml package -DskipTests
 
-CONFIG="$(mktemp)"
-trap 'rm -f "$CONFIG"' EXIT
-cat > "$CONFIG" <<EOF
-mode=2
-networks=$SCRIPT_DIR/input/networks.sample.txt
-passwords=$SCRIPT_DIR/input/passwords.sample.txt
-skip=0
-debug=true
-EOF
+CONFIG="/Users/sn/FT/project/public/wifi-tool/input/wifi.properties"
 
 java -jar target/wifi-tool.jar --plugin wifi --config "$CONFIG"

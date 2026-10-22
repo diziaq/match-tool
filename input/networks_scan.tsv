@@ -1,0 +1,7 @@
+SSID	Signal(dBm)	Channel	Band	Security
+Raw production	-64	5	2.4GHz	WPA2
+dato	-72	8	2.4GHz	WPA2
+AX23	-78	10	2.4GHz	WPA2
+dato_5G	-79	100	5GHz	WPA2
+SILKNET	-82	6	2.4GHz	WPA2
+Nika	-83	2	2.4GHz	WPA2
