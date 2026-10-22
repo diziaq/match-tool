@@ -27,7 +27,7 @@ mvn clean -s settings.xml package -DskipTests
 
 echo
 echo "== Step 1: scan visible networks (mode 1) =="
-java -jar "$JAR" --mode 1 --debug false
+java -jar "$JAR" --plugin wifi --mode 1 --debug false
 
 echo
 echo "== Step 2: batch match (mode 2) =="
@@ -35,10 +35,11 @@ echo "   networks : $NETWORKS"
 echo "   passwords: $PASSWORDS"
 echo "   (only networks you own or are authorised to test)"
 java -jar "$JAR" \
+     --plugin wifi \
      --mode 2 \
      --debug true \
-     --left  "$NETWORKS" \
-     --right "$PASSWORDS"
+     --networks  "$NETWORKS" \
+     --passwords "$PASSWORDS"
 
 echo
 echo "Matches, if any, are also written to timestamped *_success.log files under the logs/"

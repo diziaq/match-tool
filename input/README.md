@@ -28,7 +28,13 @@ belong to other people.
 
 ## Why full paths
 
-The jar resolves a relative `--left` / `--right` against the directory that holds the jar
+The jar resolves a relative `--networks` / `--passwords` against the directory that holds the jar
 (`target/`), not against your shell's current directory. The run scripts build absolute paths
 from their own location so the jar always gets a valid path. If you call the jar directly, pass
-absolute paths too.
+absolute paths too, for example:
+
+```
+java -jar target/wifi-tool.jar --plugin wifi --mode 2 \
+     --networks /abs/path/to/input/networks.txt \
+     --passwords /abs/path/to/input/passwords.txt
+```

@@ -14,7 +14,8 @@ java --version
 mvn clean -s settings.xml package -DskipTests
 
 java -jar target/wifi-tool.jar \
+     --plugin wifi \
      --mode 2 \
      --debug true \
-     --left  "$SCRIPT_DIR/input/networks.sample.txt" \
-     --right "$SCRIPT_DIR/input/passwords.sample.txt"
+     --networks  "$SCRIPT_DIR/input/networks.sample.txt" \
+     --passwords "$SCRIPT_DIR/input/passwords.sample.txt"
