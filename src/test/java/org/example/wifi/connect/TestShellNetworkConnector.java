@@ -2,7 +2,7 @@ package org.example.wifi.connect;
 
 import org.example.Platform;
 import org.example.io.Logger;
-import org.example.matcher.MatchOutcome;
+import org.example.engine.Outcome;
 import org.example.wifi.Network;
 import org.example.wifi.Password;
 import org.junit.jupiter.api.AfterEach;
@@ -49,18 +49,18 @@ class TestShellNetworkConnector {
         void returnsMatchWhenOutputBlank() {
             var connector = new ShellNetworkConnector(cmd -> "", Platform.MACOS, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("secret")))
-                .isInstanceOf(MatchOutcome.Match.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("secret")))
+                .isInstanceOf(Outcome.Match.class);
         }
 
         @Test
-        void returnsUnavailableWhenCouldNotFind() {
+        void returnsSkipWhenCouldNotFind() {
             var connector = new ShellNetworkConnector(
                 cmd -> "Could not find network HomeWiFi.",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("pass")))
-                .isInstanceOf(MatchOutcome.Unavailable.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("pass")))
+                .isInstanceOf(Outcome.Skip.class);
         }
 
         @Test
@@ -69,8 +69,8 @@ class TestShellNetworkConnector {
                 cmd -> "Failed to join network HomeWiFi.\nError: -3925  The operation couldn't be completed. tmpErr",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("wrong")))
-                .isInstanceOf(MatchOutcome.Mismatch.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("wrong")))
+                .isInstanceOf(Outcome.Mismatch.class);
         }
 
         @Test
@@ -79,8 +79,8 @@ class TestShellNetworkConnector {
                 cmd -> "Failed to join network HomeWiFi.\nError: -3912  The operation couldn't be completed. (com.apple.wifi.apple80211API.error error -3912.)",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("pass")))
-                .isInstanceOf(MatchOutcome.Failure.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("pass")))
+                .isInstanceOf(Outcome.Failure.class);
         }
 
         @Test
@@ -89,8 +89,8 @@ class TestShellNetworkConnector {
                 cmd -> "some unexpected error",
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("pass")))
-                .isInstanceOf(MatchOutcome.Failure.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("pass")))
+                .isInstanceOf(Outcome.Failure.class);
         }
 
         @Test
@@ -100,7 +100,7 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.test(net("MyNet"), pwd("pass"));
+            connector.evaluate(net("MyNet"), pwd("pass"));
 
             assertThat(captured[0]).contains("networksetup").contains("-setairportnetwork");
         }
@@ -115,8 +115,8 @@ class TestShellNetworkConnector {
                 cmd -> "Device 'wlan0' successfully connected.",
                 Platform.LINUX, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("secret")))
-                .isInstanceOf(MatchOutcome.Match.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("secret")))
+                .isInstanceOf(Outcome.Match.class);
         }
 
         @Test
@@ -125,8 +125,8 @@ class TestShellNetworkConnector {
                 cmd -> "Error: Connection failed.",
                 Platform.LINUX, silentLogger());
 
-            assertThat(connector.test(net("HomeWiFi"), pwd("wrong")))
-                .isInstanceOf(MatchOutcome.Failure.class);
+            assertThat(connector.evaluate(net("HomeWiFi"), pwd("wrong")))
+                .isInstanceOf(Outcome.Failure.class);
         }
 
         @Test
@@ -135,8 +135,8 @@ class TestShellNetworkConnector {
                 cmd -> "SUCCESSFULLY connected",
                 Platform.LINUX, silentLogger());
 
-            assertThat(connector.test(net("Net"), pwd("pass")))
-                .isInstanceOf(MatchOutcome.Match.class);
+            assertThat(connector.evaluate(net("Net"), pwd("pass")))
+                .isInstanceOf(Outcome.Match.class);
         }
 
         @Test
@@ -146,7 +146,7 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.LINUX, silentLogger());
 
-            connector.test(net("MyNet"), pwd("pass"));
+            connector.evaluate(net("MyNet"), pwd("pass"));
 
             assertThat(captured[0]).contains("nmcli").contains("password");
         }
@@ -161,8 +161,8 @@ class TestShellNetworkConnector {
                 cmd -> { throw new RuntimeException("network down"); },
                 Platform.MACOS, silentLogger());
 
-            assertThat(connector.test(net("Net"), pwd("pass")))
-                .isInstanceOf(MatchOutcome.Failure.class);
+            assertThat(connector.evaluate(net("Net"), pwd("pass")))
+                .isInstanceOf(Outcome.Failure.class);
         }
 
         @Test
@@ -171,9 +171,9 @@ class TestShellNetworkConnector {
                 cmd -> { throw new RuntimeException("network down"); },
                 Platform.MACOS, silentLogger());
 
-            MatchOutcome outcome = connector.test(net("Net"), pwd("pass"));
+            Outcome outcome = connector.evaluate(net("Net"), pwd("pass"));
 
-            assertThat(((MatchOutcome.Failure) outcome).reason()).contains("network down");
+            assertThat(((Outcome.Failure) outcome).reason()).contains("network down");
         }
 
         @Test
@@ -183,7 +183,7 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.test(net("O'Brien's WiFi"), pwd("pass"));
+            connector.evaluate(net("O'Brien's WiFi"), pwd("pass"));
 
             assertThat(captured[0]).contains("O'\\''Brien");
         }
@@ -195,7 +195,7 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.test(net("Net"), pwd("it's secret"));
+            connector.evaluate(net("Net"), pwd("it's secret"));
 
             assertThat(captured[0]).contains("it'\\''s secret");
         }
@@ -207,7 +207,7 @@ class TestShellNetworkConnector {
                 cmd -> { captured[0] = cmd; return ""; },
                 Platform.MACOS, silentLogger());
 
-            connector.test(Network.of("TargetSSID", -45), pwd("pass"));
+            connector.evaluate(Network.of("TargetSSID", -45), pwd("pass"));
 
             assertThat(captured[0]).contains("TargetSSID");
         }

@@ -2,10 +2,10 @@ package org.example.wifi.connect;
 
 import org.example.Platform;
 import org.example.PlatformDependent;
-import org.example.matcher.MatchOutcome;
+import org.example.engine.Outcome;
 
 /**
- * Interprets the raw stdout of a connection command as a typed {@link MatchOutcome}.
+ * Interprets the raw stdout of a connection command as a typed {@link Outcome}.
  *
  * <p>Each OS platform has its own classifier because the tool output format differs:
  * macOS uses {@code networksetup} error codes and message text, while Linux uses {@code nmcli}'s
@@ -15,10 +15,9 @@ import org.example.matcher.MatchOutcome;
 public interface OutputClassifier extends PlatformDependent {
     /**
      * @param output the raw stdout returned by the connection command (may be blank)
-     * @return a non-null {@link MatchOutcome}; unrecognised output must return
-     *         {@link MatchOutcome.Failure}
+     * @return a non-null {@link Outcome}; unrecognised output must return {@link Outcome.Failure}
      */
-    MatchOutcome classify(String output);
+    Outcome classify(String output);
 
     static OutputClassifier of(Platform platform) {
         return switch (platform) {
