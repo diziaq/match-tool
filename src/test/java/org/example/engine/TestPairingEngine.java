@@ -6,6 +6,10 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -253,6 +257,60 @@ class TestPairingEngine {
             engine.run(infiniteOuter, src("only"), alwaysMatch, matches::add);
 
             assertThat(matches).containsExactly(new Pair<>(0, "only"));
+        }
+    }
+
+    @Nested
+    class Budget {
+
+        @Test
+        void rejectsNonPositiveBudget() {
+            assertThatThrownBy(() -> PairingEngine.builder().budget(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(">= 1");
+        }
+
+        /**
+         * A CyclicBarrier sized to the budget trips only when exactly {@code budget} evaluations run
+         * at once, so a clean run proves the engine reaches the budget; the peak counter proves it
+         * never exceeds it. No sleeps — the barrier does the synchronising.
+         */
+        @Test
+        @Timeout(10)
+        void runsExactlyBudgetEvaluationsConcurrently() {
+            int budget = 3;
+            CyclicBarrier barrier = new CyclicBarrier(budget);
+            AtomicInteger current = new AtomicInteger();
+            AtomicInteger peak = new AtomicInteger();
+            PairEvaluator<String, String> barrierEvaluator = (a, b) -> {
+                peak.accumulateAndGet(current.incrementAndGet(), Math::max);
+                try {
+                    barrier.await(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    throw new IllegalStateException("budget not reached: barrier timed out", e);
+                }
+                current.decrementAndGet();
+                return new Outcome.Mismatch();
+            };
+            var engine = PairingEngine.<String, String>builder().budget(budget).build();
+
+            engine.run(src("N"), src("p1", "p2", "p3", "p4", "p5", "p6"), barrierEvaluator, p -> {});
+
+            assertThat(peak).hasValue(budget);
+        }
+
+        @Test
+        @Timeout(10)
+        void concurrentPathReportsEveryMatch() {
+            Queue<Pair<String, String>> matches = new ConcurrentLinkedQueue<>();
+            PairEvaluator<String, String> matchEvens = (a, b) ->
+                List.of("p2", "p4", "p6").contains(b) ? new Outcome.Match() : new Outcome.Mismatch();
+            var engine = PairingEngine.<String, String>builder().budget(4).build();
+
+            engine.run(src("N"), src("p1", "p2", "p3", "p4", "p5", "p6"), matchEvens, matches::add);
+
+            assertThat(matches).containsExactlyInAnyOrder(
+                new Pair<>("N", "p2"), new Pair<>("N", "p4"), new Pair<>("N", "p6"));
         }
     }
 }
