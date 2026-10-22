@@ -1,45 +1,53 @@
 #!/usr/bin/env bash
 # wifi-tool — reference example (v2).
 #
-# Runs the tool in two steps:
+# Runs the tool in two steps, each driven by a small config file (the command line only ever
+# carries --plugin and --config):
 #   1. scan the visible networks (mode 1)
 #   2. batch match a password list against a network list (mode 2)
 #
-# Network and password lists default to the dummy samples in input/, so the script runs out of
-# the box without touching any real network. Pass your own lists as the first two arguments:
+# Step 2 uses the config file passed as the first argument, or a generated one pointing at the
+# dummy samples in input/ so the script runs out of the box.
 #
-#   ./run_v2.sh /abs/path/networks.txt /abs/path/passwords.txt
+#   ./run_v2.sh [/abs/path/to/your.properties]
 #
-# AUTHORISATION: only run the batch match against networks you own or are explicitly authorised
-# to test (your own access point, a home lab, a CTF range). See input/README.md.
+# AUTHORISATION: only run the batch match against networks you own or are explicitly authorised to
+# test (your own access point, a home lab, a CTF range). See input/README.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JAR="$SCRIPT_DIR/target/wifi-tool.jar"
-INPUT_DIR="$SCRIPT_DIR/input"
-NETWORKS="${1:-$INPUT_DIR/networks.sample.txt}"
-PASSWORDS="${2:-$INPUT_DIR/passwords.sample.txt}"
-
 cd "$SCRIPT_DIR"
 
 java --version
 mvn clean -s settings.xml package -DskipTests
 
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+printf 'mode=1\ndebug=false\n' > "$TMP/scan.properties"
 echo
 echo "== Step 1: scan visible networks (mode 1) =="
-java -jar "$JAR" --plugin wifi --mode 1 --debug false
+java -jar "$JAR" --plugin wifi --config "$TMP/scan.properties"
+
+if [[ -n "${1:-}" ]]; then
+  BATCH="$1"
+else
+  BATCH="$TMP/batch.properties"
+  cat > "$BATCH" <<EOF
+mode=2
+networks=$SCRIPT_DIR/input/networks.sample.txt
+passwords=$SCRIPT_DIR/input/passwords.sample.txt
+skip=0
+debug=true
+EOF
+fi
 
 echo
 echo "== Step 2: batch match (mode 2) =="
-echo "   networks : $NETWORKS"
-echo "   passwords: $PASSWORDS"
+echo "   config: $BATCH"
 echo "   (only networks you own or are authorised to test)"
-java -jar "$JAR" \
-     --plugin wifi \
-     --mode 2 \
-     --debug true \
-     --networks  "$NETWORKS" \
-     --passwords "$PASSWORDS"
+java -jar "$JAR" --plugin wifi --config "$BATCH"
 
 echo
 echo "Matches, if any, are also written to timestamped *_success.log files under the logs/"

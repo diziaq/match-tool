@@ -1,25 +1,35 @@
 package org.example;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 import org.example.cli.ArgSchema;
 import org.example.cli.CliArgSource;
 import org.example.cli.ParsedArgs;
+import org.example.cli.PropertiesArgSource;
 import org.example.plugin.Plugin;
 
 /**
- * Application entry point. Selects a plugin by name with {@code --plugin <name>} and runs it; the
- * plugin declares and parses its own arguments. Plugins are discovered through {@link ServiceLoader},
- * so the entry point depends on no specific plugin — the WiFi behaviour lives entirely in its plugin.
+ * Application entry point. The command line carries only two things: which plugin to run and where
+ * its config file is.
  *
  * <pre>
- *   --plugin wifi --mode 1
- *   --plugin wifi --mode 2 --networks &lt;file&gt; --passwords &lt;file&gt; [--skip N] [--debug true]
+ *   --plugin &lt;name&gt; --config &lt;path-to.properties&gt;
  * </pre>
  *
- * <p>This is the only place that calls {@link System#exit}: it maps a usage error or a run failure to
- * exit code 1. Plugins signal a usage error by throwing {@link IllegalArgumentException}.
+ * Everything else — modes, inputs, flags — lives in the plugin's config file (a {@code .properties}
+ * file, by convention under {@code input/}). Plugins are discovered through {@link ServiceLoader}, so
+ * the entry point depends on no specific plugin.
+ *
+ * <p><b>Responsibilities.</b> The harness here is responsible for config <em>availability and
+ * sanity</em>: it selects the plugin, and loads a config file that exists, is readable, and parses as
+ * properties. The <em>plugin</em> is responsible for the config's <em>integrity</em>: its own schema
+ * (required keys, types) and semantic checks (for example that an input file exists).
+ *
+ * <p>This is the only place that calls {@link System#exit}: it maps a usage error to exit code 1.
  */
 public final class Main {
 
@@ -39,12 +49,15 @@ public final class Main {
 
     private static void run(String[] args) throws Exception {
         Map<String, Plugin> plugins = discoverPlugins();
-        Map<String, String> raw = new CliArgSource(args).load();
 
+        // The command line carries only --plugin and --config.
         ArgSchema bootstrap = ArgSchema.builder()
             .required("plugin", String.class, s -> s)
+            .required("config", Path.class, Path::of)
             .build();
-        String pluginName = new ParsedArgs(bootstrap, raw).get("plugin");
+        ParsedArgs cli = new ParsedArgs(bootstrap, new CliArgSource(args));
+        String pluginName = cli.get("plugin");
+        Path configPath = cli.get("config");
 
         Plugin plugin = plugins.get(pluginName);
         if (plugin == null) {
@@ -52,7 +65,19 @@ public final class Main {
                 "unknown plugin '" + pluginName + "'. Available: " + plugins.keySet());
         }
 
-        plugin.run(new ParsedArgs(plugin.schema(), raw));
+        // Harness responsibility: the config is available and sane (exists, readable, parses).
+        if (!Files.isReadable(configPath)) {
+            throw new IllegalArgumentException("config file not found or not readable: " + configPath);
+        }
+        PropertiesArgSource config;
+        try {
+            config = PropertiesArgSource.fromFile(configPath);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("cannot read config file " + configPath + ": " + e.getMessage());
+        }
+
+        // Plugin responsibility: validate the config's integrity, then run.
+        plugin.run(new ParsedArgs(plugin.schema(), config));
     }
 
     private static Map<String, Plugin> discoverPlugins() {
