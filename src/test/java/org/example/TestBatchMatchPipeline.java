@@ -48,7 +48,6 @@ class TestBatchMatchPipeline {
             .maxMatchesPerOuter(1)
             .breakInnerOnSkip()
             .breakInnerAfterFailures(3)
-            .retriesOnFailure(2)
             .build();
     }
 
