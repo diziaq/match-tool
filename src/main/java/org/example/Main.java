@@ -20,7 +20,7 @@ import org.example.wifi.connect.NetworkConnector;
 import org.example.wifi.scan.NetworkScanner;
 
 /**
- * Application entry point. Dispatches to one of four operational modes based on {@code --mode}:
+ * Application entry point. Dispatches to one of two operational modes based on {@code --mode}:
  *
  * <ul>
  *   <li><b>1 – scan:</b> Prints all visible WiFi networks with signal strength.</li>
@@ -95,7 +95,8 @@ public class Main {
                                            .map(Network::of).toList();
                 String prefix = LocalDateTime.now().format(LOG_FILE_TIMESTAMP);
                 try (var traceLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_trace.log");
-                     var successLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_success.log")) {
+                     var successLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_success.log");
+                     var passwords = Files.lines(right)) {
                     MatchPredicate<Network, Password> tracingPredicate = (network, password) -> {
                         MatchOutcome outcome = connector.test(network, password);
                         traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password.value(), network.ssid()));
@@ -103,7 +104,7 @@ public class Main {
                     };
                     MatchCoordinator.<Network, Password>effective().match(
                         lefts,
-                        Files.lines(right).skip(skip).map(Password::new),
+                        passwords.skip(skip).map(Password::new),
                         tracingPredicate,
                         match -> {
                             successLog.info("TRUE: %s @ %s".formatted(match.right().value(), match.left().ssid()));
