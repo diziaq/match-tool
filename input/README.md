@@ -9,6 +9,18 @@ built jar by hand. Each file is one value per line.
 The sample files contain dummy names so `run.sh` and `run_v2.sh` run out of the box without
 touching any real network. Replace them with your own lists to do real work:
 
+## Discovering what is nearby
+
+To build your own list, run the helper (macOS) to dump every visible network with its signal and
+characteristics to a TSV, then delete the rows that are out of scope:
+
+```
+./scan_networks.sh                 # writes input/networks_scan.tsv (SSID, Signal, Channel, Band, Security)
+# edit input/networks_scan.tsv, keep only the networks you own or may test, then:
+cut -f1 input/networks_scan.tsv | tail -n +2 > input/networks.txt
+```
+
+
 ```
 input/networks.txt     # SSIDs you want to test
 input/passwords.txt    # passwords to try
