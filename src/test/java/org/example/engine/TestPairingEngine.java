@@ -107,28 +107,55 @@ class TestPairingEngine {
     }
 
     @Nested
-    class StopBehaviour {
+    class Completion {
 
         @Test
-        void stopInnerOnMatchDropsRemainingCandidatesForThatOuter() {
+        void completesOuterAtFirstMatchWithCapOne() {
             var evaluator = new RecordingEvaluator("N1|p2");
-            var engine = PairingEngine.<String, String>builder().stopInnerOnMatch().build();
+            var engine = PairingEngine.<String, String>builder().maxMatchesPerOuter(1).build();
 
             engine.run(src("N1"), src("p1", "p2", "p3"), evaluator, p -> {});
 
             assertThat(evaluator.log).containsExactly("N1|p1", "N1|p2");
         }
 
+        /** A matched outer item is completed; the other outer items keep being processed. */
         @Test
-        void stopInnerOnMatchAdvancesToNextOuter() {
+        void continuesOtherOuterItemsAfterOneCompletes() {
             var evaluator = new RecordingEvaluator("N1|p1", "N2|p1");
             List<Pair<String, String>> matches = new ArrayList<>();
-            var engine = PairingEngine.<String, String>builder().stopInnerOnMatch().build();
+            var engine = PairingEngine.<String, String>builder().maxMatchesPerOuter(1).build();
 
             engine.run(src("N1", "N2"), src("p1", "p2"), evaluator, matches::add);
 
             assertThat(evaluator.log).containsExactly("N1|p1", "N2|p1");
             assertThat(matches).containsExactly(new Pair<>("N1", "p1"), new Pair<>("N2", "p1"));
+        }
+
+        /** With a cap of 2 the outer item stops at its second match; later candidates are untried. */
+        @Test
+        void completesOuterAfterReachingTheMatchCap() {
+            var evaluator = new RecordingEvaluator("N1|p1", "N1|p3", "N1|p4");
+            List<Pair<String, String>> matches = new ArrayList<>();
+            var engine = PairingEngine.<String, String>builder().maxMatchesPerOuter(2).build();
+
+            engine.run(src("N1"), src("p1", "p2", "p3", "p4"), evaluator, matches::add);
+
+            assertThat(evaluator.log).containsExactly("N1|p1", "N1|p2", "N1|p3");
+            assertThat(matches).containsExactly(new Pair<>("N1", "p1"), new Pair<>("N1", "p3"));
+        }
+
+        /** The default cap is unbounded: every candidate is scanned and every match is reported. */
+        @Test
+        void unboundedCapScansEveryCandidateAndReportsEveryMatch() {
+            var evaluator = new RecordingEvaluator("N1|p1", "N1|p3");
+            List<Pair<String, String>> matches = new ArrayList<>();
+            var engine = PairingEngine.<String, String>builder().build();
+
+            engine.run(src("N1"), src("p1", "p2", "p3"), evaluator, matches::add);
+
+            assertThat(evaluator.log).containsExactly("N1|p1", "N1|p2", "N1|p3");
+            assertThat(matches).containsExactly(new Pair<>("N1", "p1"), new Pair<>("N1", "p3"));
         }
 
         @Test
@@ -141,6 +168,13 @@ class TestPairingEngine {
 
             assertThat(evaluator.log).containsExactly("N1|p1");
             assertThat(matches).containsExactly(new Pair<>("N1", "p1"));
+        }
+
+        @Test
+        void rejectsNonPositiveMatchCap() {
+            assertThatThrownBy(() -> PairingEngine.builder().maxMatchesPerOuter(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(">= 1");
         }
     }
 

@@ -32,9 +32,17 @@ import java.util.stream.Stream;
  * most {@code budget} evaluations are ever in flight; it stays lazy and reports matches one at a time
  * (so the result consumer need not be thread-safe), but does not guarantee order.
  *
- * <p><b>Policies</b> (all default off), applied per outer item:
+ * <p><b>Completion.</b> Each outer item is independent. It is complete when its inner sweep is
+ * exhausted, or when it reaches {@code maxMatchesPerOuter} matches — whichever comes first. Reaching
+ * the match cap stops that outer item's inner loop only; other outer items keep going. The cap
+ * defaults to {@link Integer#MAX_VALUE} (scan every candidate and report every match); set it to 1 to
+ * stop an outer item at its first match (what the WiFi plugin wants — one working password per
+ * network). {@code stopAllOnMatch} is the separate, stronger policy that ends the entire run.
+ *
+ * <p><b>Policies</b> (defaults: cap unbounded, the rest off), applied per outer item:
  * <ul>
- *   <li>{@code stopInnerOnMatch} — on {@link Outcome.Match}, stop this outer item's inner sweep.</li>
+ *   <li>{@code maxMatchesPerOuter(n)} — complete an outer item (stop its inner sweep) after {@code n}
+ *       matches; other outer items continue. Default {@link Integer#MAX_VALUE}.</li>
  *   <li>{@code stopAllOnMatch} — on {@link Outcome.Match}, end the whole run.</li>
  *   <li>{@code breakInnerOnSkip} — on {@link Outcome.Skip}, stop this outer item's inner sweep.</li>
  *   <li>{@code breakInnerAfterFailures(n)} — stop this outer item's inner sweep once it has
@@ -51,7 +59,7 @@ public final class PairingEngine<A, B> {
 
     private final boolean swap;
     private final int     budget;
-    private final boolean stopInnerOnMatch;
+    private final int     maxMatchesPerOuter;
     private final boolean stopAllOnMatch;
     private final boolean breakInnerOnSkip;
     private final int     breakInnerAfterFailures; // 0 = disabled
@@ -60,7 +68,7 @@ public final class PairingEngine<A, B> {
     private PairingEngine(Builder<A, B> b) {
         this.swap                    = b.swap;
         this.budget                  = b.budget;
-        this.stopInnerOnMatch        = b.stopInnerOnMatch;
+        this.maxMatchesPerOuter      = b.maxMatchesPerOuter;
         this.stopAllOnMatch          = b.stopAllOnMatch;
         this.breakInnerOnSkip        = b.breakInnerOnSkip;
         this.breakInnerAfterFailures = b.breakInnerAfterFailures;
@@ -120,6 +128,7 @@ public final class PairingEngine<A, B> {
         BiFunction<O, I, Outcome> act, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch
     ) {
         int failures = 0;
+        int matches = 0;
         try (Stream<I> innerStream = inner.stream()) {
             Iterator<I> innerIt = innerStream.iterator();
             while (innerIt.hasNext()) {
@@ -129,7 +138,7 @@ public final class PairingEngine<A, B> {
                     case Outcome.Match ignored -> {
                         onMatch.accept(pairOf.apply(o, i));
                         if (stopAllOnMatch) yield Control.STOP_ALL;
-                        yield stopInnerOnMatch ? Control.BREAK_INNER : Control.CONTINUE;
+                        yield ++matches >= maxMatchesPerOuter ? Control.BREAK_INNER : Control.CONTINUE;
                     }
                     case Outcome.Skip ignored ->
                         breakInnerOnSkip ? Control.BREAK_INNER : Control.CONTINUE;
@@ -172,6 +181,7 @@ public final class PairingEngine<A, B> {
     ) {
         AtomicBoolean stopOuter = new AtomicBoolean(false);
         AtomicInteger failures = new AtomicInteger();
+        AtomicInteger matches = new AtomicInteger();
         List<Future<?>> inFlight = new ArrayList<>();
         try (Stream<I> innerStream = inner.stream()) {
             Iterator<I> innerIt = innerStream.iterator();
@@ -184,7 +194,7 @@ public final class PairingEngine<A, B> {
                 }
                 inFlight.add(exec.submit(() -> {
                     try {
-                        handleConcurrent(withRetry(o, i, act), o, i, pairOf, onMatch, matchLock, stopOuter, stopAll, failures);
+                        handleConcurrent(withRetry(o, i, act), o, i, pairOf, onMatch, matchLock, stopOuter, stopAll, failures, matches);
                     } finally {
                         permits.release();
                     }
@@ -196,15 +206,15 @@ public final class PairingEngine<A, B> {
 
     private <O, I> void handleConcurrent(
         Outcome outcome, O o, I i, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch,
-        Object matchLock, AtomicBoolean stopOuter, AtomicBoolean stopAll, AtomicInteger failures
+        Object matchLock, AtomicBoolean stopOuter, AtomicBoolean stopAll, AtomicInteger failures, AtomicInteger matches
     ) {
         switch (outcome) {
             case Outcome.Match ignored -> {
                 synchronized (matchLock) {
                     onMatch.accept(pairOf.apply(o, i));
                 }
-                if (stopAllOnMatch)   stopAll.set(true);
-                if (stopInnerOnMatch) stopOuter.set(true);
+                if (stopAllOnMatch) stopAll.set(true);
+                if (matches.incrementAndGet() >= maxMatchesPerOuter) stopOuter.set(true);
             }
             case Outcome.Skip ignored -> {
                 if (breakInnerOnSkip) stopOuter.set(true);
@@ -255,7 +265,7 @@ public final class PairingEngine<A, B> {
 
         private boolean swap                    = false;
         private int     budget                  = 1;
-        private boolean stopInnerOnMatch        = false;
+        private int     maxMatchesPerOuter      = Integer.MAX_VALUE;
         private boolean stopAllOnMatch          = false;
         private boolean breakInnerOnSkip        = false;
         private int     breakInnerAfterFailures = 0;
@@ -281,9 +291,17 @@ public final class PairingEngine<A, B> {
             return this;
         }
 
-        /** On {@link Outcome.Match}, stop the current outer item's inner sweep. */
-        public Builder<A, B> stopInnerOnMatch() {
-            this.stopInnerOnMatch = true;
+        /**
+         * Complete an outer item once it reaches {@code n} matches: its inner sweep stops, other
+         * outer items keep going. An outer item that never reaches {@code n} is completed by
+         * exhausting its inner source. The default is {@link Integer#MAX_VALUE} — report every match
+         * and scan every candidate. The WiFi plugin sets {@code 1}: one working password per network.
+         *
+         * @param n must be in {@code [1, Integer.MAX_VALUE]}
+         */
+        public Builder<A, B> maxMatchesPerOuter(int n) {
+            if (n < 1) throw new IllegalArgumentException("maxMatchesPerOuter must be >= 1, got: " + n);
+            this.maxMatchesPerOuter = n;
             return this;
         }
 

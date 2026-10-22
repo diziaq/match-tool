@@ -100,7 +100,7 @@ public final class WifiPlugin implements Plugin {
 
         PairingEngine<Network, Password> engine = PairingEngine.<Network, Password>builder()
             .budget(parallelismBudget())
-            .stopInnerOnMatch()
+            .maxMatchesPerOuter(1) // one working password per network completes it
             .breakInnerOnSkip()
             .breakInnerAfterFailures(3)
             .retriesOnFailure(2)

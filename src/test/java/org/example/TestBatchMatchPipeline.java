@@ -45,7 +45,7 @@ class TestBatchMatchPipeline {
     private PairingEngine<Network, Password> wifiEngine() {
         return PairingEngine.<Network, Password>builder()
             .budget(1)
-            .stopInnerOnMatch()
+            .maxMatchesPerOuter(1)
             .breakInnerOnSkip()
             .breakInnerAfterFailures(3)
             .retriesOnFailure(2)
@@ -69,7 +69,7 @@ class TestBatchMatchPipeline {
         assertThat(matches.getFirst().b().value()).isEqualTo("correcthorse");
     }
 
-    /** stopInnerOnMatch stops trying passwords for a network once it connects. */
+    /** maxMatchesPerOuter(1) stops trying passwords for a network once it connects. */
     @Test
     void stopsTryingNetworkAfterItMatches() throws Exception {
         Path networksFile = writeLines("networks.txt", "HomeLab");
