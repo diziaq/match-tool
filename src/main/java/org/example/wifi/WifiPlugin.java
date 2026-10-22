@@ -12,6 +12,7 @@ import org.example.engine.PairEvaluator;
 import org.example.engine.PairingEngine;
 import org.example.engine.Source;
 import org.example.io.Logger;
+import org.example.io.ProgressReporter;
 import org.example.plugin.Plugin;
 import org.example.shell.ShellRunner;
 import org.example.shell.SystemShellRunner;
@@ -37,6 +38,7 @@ import org.example.wifi.scan.NetworkScanner;
 public final class WifiPlugin implements Plugin {
 
     private static final DateTimeFormatter LOG_FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
+    private static final long PROGRESS_INTERVAL_MILLIS = 20_000;
 
     @Override
     public String name() {
@@ -106,11 +108,14 @@ public final class WifiPlugin implements Plugin {
             .retriesOnFailure(2)
             .build();
 
+        var progress = ProgressReporter.every(PROGRESS_INTERVAL_MILLIS, logger::info);
         String prefix = LocalDateTime.now().format(LOG_FILE_TIMESTAMP);
         try (var traceLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_trace.log");
              var successLog = new Logger(Logger.Output.FILE, false, "logs/" + prefix + "_success.log")) {
             PairEvaluator<Network, Password> tracing = (network, password) -> {
+                long started = System.nanoTime();
                 Outcome outcome = connector.evaluate(network, password);
+                progress.record(System.nanoTime() - started, outcome instanceof Outcome.Match);
                 traceLog.info("%s: %s @ %s".formatted(outcome.getClass().getSimpleName(), password.value(), network.ssid()));
                 return outcome;
             };
@@ -119,6 +124,7 @@ public final class WifiPlugin implements Plugin {
                 logger.info("Matched " + pair);
             });
         }
+        progress.reportNow();
     }
 
     private static Path requireFile(Path path, String argName) {
