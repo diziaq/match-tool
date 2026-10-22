@@ -10,21 +10,18 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
  * Runs a {@link PairEvaluator} over every pair drawn from two {@link Source}s, as two nested loops.
  *
- * <p><b>Laziness.</b> The outer source is consumed once; the inner source is re-opened once per outer
- * item. Both are iterated lazily through an {@link Iterator} and closed after use — the engine never
- * materialises a whole source, so either source may be arbitrarily large or effectively infinite.
- * (To deliberately pre-load a small inner source, wrap it in {@link CachingSource}.)
- *
- * <p><b>Orientation.</b> By default the first source ({@code a}) is the outer loop and the second
- * ({@code b}) is the inner loop. {@link Builder#swap()} flips this without changing the evaluator's
- * {@code (a, b)} signature. The policies below always act on whichever source is the outer loop.
+ * <p><b>Laziness.</b> The first source is the outer loop and is consumed once; the second source is
+ * the inner loop and is re-opened once per outer item. Both are iterated lazily through an
+ * {@link Iterator} and closed after use — the engine never materialises a whole source, so either
+ * source may be arbitrarily large or effectively infinite. (To deliberately pre-load a small inner
+ * source, wrap it in {@link CachingSource}.) The caller — a plugin — is responsible for passing the
+ * sources in the right order for its intent (for WiFi: networks outer, passwords inner).
  *
  * <p><b>Parallelism budget.</b> {@link Builder#budget(int)} caps how many evaluations run at once;
  * it defaults to {@code 1}. Budget {@code 1} is the sequential, deterministic path. Budget greater
@@ -57,7 +54,6 @@ public final class PairingEngine<A, B> {
 
     private enum Control { CONTINUE, BREAK_INNER, STOP_ALL }
 
-    private final boolean swap;
     private final int     budget;
     private final int     maxMatchesPerOuter;
     private final boolean stopAllOnMatch;
@@ -66,7 +62,6 @@ public final class PairingEngine<A, B> {
     private final int     retriesOnFailure;        // 0 = no retry
 
     private PairingEngine(Builder<A, B> b) {
-        this.swap                    = b.swap;
         this.budget                  = b.budget;
         this.maxMatchesPerOuter      = b.maxMatchesPerOuter;
         this.stopAllOnMatch          = b.stopAllOnMatch;
@@ -83,60 +78,43 @@ public final class PairingEngine<A, B> {
      * Runs the pairing. Iterates the outer source once and the inner source once per outer item,
      * calling {@code evaluator} for each pair and {@code onMatch} for each {@link Outcome.Match}.
      *
-     * @param a         the first source (outer loop unless {@link Builder#swap()} was set)
-     * @param b         the second source (inner loop unless {@link Builder#swap()} was set)
+     * @param outer     the outer-loop source (consumed once)
+     * @param inner     the inner-loop source (re-opened once per outer item)
      * @param evaluator the pair action
-     * @param onMatch   called for every accepted pair, always as {@code (a, b)}
+     * @param onMatch   called for every accepted pair
      */
-    public void run(Source<A> a, Source<B> b, PairEvaluator<A, B> evaluator, Consumer<Pair<A, B>> onMatch) {
-        if (swap) {
-            runLoop(b, a, (bi, ai) -> evaluator.evaluate(ai, bi), (bi, ai) -> new Pair<>(ai, bi), onMatch);
-        } else {
-            runLoop(a, b, evaluator::evaluate, Pair::new, onMatch);
-        }
-    }
-
-    private <O, I> void runLoop(
-        Source<O> outer, Source<I> inner,
-        BiFunction<O, I, Outcome> act, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch
-    ) {
+    public void run(Source<A> outer, Source<B> inner, PairEvaluator<A, B> evaluator, Consumer<Pair<A, B>> onMatch) {
         if (budget <= 1) {
-            sequentialRun(outer, inner, act, pairOf, onMatch);
+            sequentialRun(outer, inner, evaluator, onMatch);
         } else {
-            concurrentRun(outer, inner, act, pairOf, onMatch);
+            concurrentRun(outer, inner, evaluator, onMatch);
         }
     }
 
     // ── Sequential path (deterministic) ─────────────────────────────────────
 
-    private <O, I> void sequentialRun(
-        Source<O> outer, Source<I> inner,
-        BiFunction<O, I, Outcome> act, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch
-    ) {
-        try (Stream<O> outerStream = outer.stream()) {
-            Iterator<O> outerIt = outerStream.iterator();
+    private void sequentialRun(Source<A> outer, Source<B> inner, PairEvaluator<A, B> evaluator, Consumer<Pair<A, B>> onMatch) {
+        try (Stream<A> outerStream = outer.stream()) {
+            Iterator<A> outerIt = outerStream.iterator();
             while (outerIt.hasNext()) {
-                if (sweepInner(outerIt.next(), inner, act, pairOf, onMatch) == Control.STOP_ALL) {
+                if (sweepInner(outerIt.next(), inner, evaluator, onMatch) == Control.STOP_ALL) {
                     return;
                 }
             }
         }
     }
 
-    private <O, I> Control sweepInner(
-        O o, Source<I> inner,
-        BiFunction<O, I, Outcome> act, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch
-    ) {
+    private Control sweepInner(A a, Source<B> inner, PairEvaluator<A, B> evaluator, Consumer<Pair<A, B>> onMatch) {
         int failures = 0;
         int matches = 0;
-        try (Stream<I> innerStream = inner.stream()) {
-            Iterator<I> innerIt = innerStream.iterator();
+        try (Stream<B> innerStream = inner.stream()) {
+            Iterator<B> innerIt = innerStream.iterator();
             while (innerIt.hasNext()) {
-                I i = innerIt.next();
-                Outcome outcome = withRetry(o, i, act);
+                B b = innerIt.next();
+                Outcome outcome = withRetry(a, b, evaluator);
                 Control control = switch (outcome) {
                     case Outcome.Match ignored -> {
-                        onMatch.accept(pairOf.apply(o, i));
+                        onMatch.accept(new Pair<>(a, b));
                         if (stopAllOnMatch) yield Control.STOP_ALL;
                         yield ++matches >= maxMatchesPerOuter ? Control.BREAK_INNER : Control.CONTINUE;
                     }
@@ -158,35 +136,31 @@ public final class PairingEngine<A, B> {
 
     // ── Concurrent path (budget > 1, bounded by a semaphore) ─────────────────
 
-    private <O, I> void concurrentRun(
-        Source<O> outer, Source<I> inner,
-        BiFunction<O, I, Outcome> act, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch
-    ) {
+    private void concurrentRun(Source<A> outer, Source<B> inner, PairEvaluator<A, B> evaluator, Consumer<Pair<A, B>> onMatch) {
         AtomicBoolean stopAll = new AtomicBoolean(false);
         Semaphore permits = new Semaphore(budget);
         Object matchLock = new Object();
         try (ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor();
-             Stream<O> outerStream = outer.stream()) {
-            Iterator<O> outerIt = outerStream.iterator();
+             Stream<A> outerStream = outer.stream()) {
+            Iterator<A> outerIt = outerStream.iterator();
             while (outerIt.hasNext() && !stopAll.get()) {
-                sweepInnerConcurrent(outerIt.next(), inner, act, pairOf, onMatch, exec, permits, matchLock, stopAll);
+                sweepInnerConcurrent(outerIt.next(), inner, evaluator, onMatch, exec, permits, matchLock, stopAll);
             }
         }
     }
 
-    private <O, I> void sweepInnerConcurrent(
-        O o, Source<I> inner,
-        BiFunction<O, I, Outcome> act, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch,
+    private void sweepInnerConcurrent(
+        A a, Source<B> inner, PairEvaluator<A, B> evaluator, Consumer<Pair<A, B>> onMatch,
         ExecutorService exec, Semaphore permits, Object matchLock, AtomicBoolean stopAll
     ) {
         AtomicBoolean stopOuter = new AtomicBoolean(false);
         AtomicInteger failures = new AtomicInteger();
         AtomicInteger matches = new AtomicInteger();
         List<Future<?>> inFlight = new ArrayList<>();
-        try (Stream<I> innerStream = inner.stream()) {
-            Iterator<I> innerIt = innerStream.iterator();
+        try (Stream<B> innerStream = inner.stream()) {
+            Iterator<B> innerIt = innerStream.iterator();
             while (innerIt.hasNext() && !stopOuter.get() && !stopAll.get()) {
-                I i = innerIt.next();
+                B b = innerIt.next();
                 acquire(permits);
                 if (stopOuter.get() || stopAll.get()) {
                     permits.release();
@@ -194,7 +168,7 @@ public final class PairingEngine<A, B> {
                 }
                 inFlight.add(exec.submit(() -> {
                     try {
-                        handleConcurrent(withRetry(o, i, act), o, i, pairOf, onMatch, matchLock, stopOuter, stopAll, failures, matches);
+                        handleConcurrent(withRetry(a, b, evaluator), a, b, onMatch, matchLock, stopOuter, stopAll, failures, matches);
                     } finally {
                         permits.release();
                     }
@@ -204,14 +178,14 @@ public final class PairingEngine<A, B> {
         awaitAll(inFlight);
     }
 
-    private <O, I> void handleConcurrent(
-        Outcome outcome, O o, I i, BiFunction<O, I, Pair<A, B>> pairOf, Consumer<Pair<A, B>> onMatch,
+    private void handleConcurrent(
+        Outcome outcome, A a, B b, Consumer<Pair<A, B>> onMatch,
         Object matchLock, AtomicBoolean stopOuter, AtomicBoolean stopAll, AtomicInteger failures, AtomicInteger matches
     ) {
         switch (outcome) {
             case Outcome.Match ignored -> {
                 synchronized (matchLock) {
-                    onMatch.accept(pairOf.apply(o, i));
+                    onMatch.accept(new Pair<>(a, b));
                 }
                 if (stopAllOnMatch) stopAll.set(true);
                 if (matches.incrementAndGet() >= maxMatchesPerOuter) stopOuter.set(true);
@@ -250,12 +224,10 @@ public final class PairingEngine<A, B> {
         }
     }
 
-    // ── Shared ───────────────────────────────────────────────────────────────
-
-    private <O, I> Outcome withRetry(O o, I i, BiFunction<O, I, Outcome> act) {
-        Outcome outcome = act.apply(o, i);
+    private Outcome withRetry(A a, B b, PairEvaluator<A, B> evaluator) {
+        Outcome outcome = evaluator.evaluate(a, b);
         for (int attempt = 0; attempt < retriesOnFailure && outcome instanceof Outcome.Failure; attempt++) {
-            outcome = act.apply(o, i);
+            outcome = evaluator.evaluate(a, b);
         }
         return outcome;
     }
@@ -263,7 +235,6 @@ public final class PairingEngine<A, B> {
     /** Fluent builder for {@link PairingEngine}. All policies default to off / 0; budget defaults to 1. */
     public static final class Builder<A, B> {
 
-        private boolean swap                    = false;
         private int     budget                  = 1;
         private int     maxMatchesPerOuter      = Integer.MAX_VALUE;
         private boolean stopAllOnMatch          = false;
@@ -272,12 +243,6 @@ public final class PairingEngine<A, B> {
         private int     retriesOnFailure        = 0;
 
         private Builder() {}
-
-        /** Iterate the second source as the outer loop and the first as the inner loop. */
-        public Builder<A, B> swap() {
-            this.swap = true;
-            return this;
-        }
 
         /**
          * Cap how many evaluations run at once. {@code 1} (the default) is the sequential,

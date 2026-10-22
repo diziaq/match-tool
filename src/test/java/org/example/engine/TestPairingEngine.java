@@ -81,32 +81,6 @@ class TestPairingEngine {
     }
 
     @Nested
-    class Orientation {
-
-        @Test
-        void swapIteratesSecondSourceAsOuter() {
-            var evaluator = new RecordingEvaluator();
-            var engine = PairingEngine.<String, String>builder().swap().build();
-
-            engine.run(src("A", "B"), src("1", "2"), evaluator, p -> {});
-
-            assertThat(evaluator.log).containsExactly("A|1", "B|1", "A|2", "B|2");
-        }
-
-        /** Swap changes traversal order only; the evaluator and the reported pair stay (a, b). */
-        @Test
-        void swapKeepsEvaluatorAndPairOrientation() {
-            var evaluator = new RecordingEvaluator("B|2");
-            List<Pair<String, String>> matches = new ArrayList<>();
-            var engine = PairingEngine.<String, String>builder().swap().build();
-
-            engine.run(src("A", "B"), src("1", "2"), evaluator, matches::add);
-
-            assertThat(matches).containsExactly(new Pair<>("B", "2"));
-        }
-    }
-
-    @Nested
     class Completion {
 
         @Test
