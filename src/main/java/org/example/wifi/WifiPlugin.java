@@ -1,6 +1,7 @@
 package org.example.wifi;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -61,6 +62,7 @@ public final class WifiPlugin implements Plugin {
             .optional("networks", Path.class, ArgSchema.PATH, null)
             .optional("passwords", Path.class, ArgSchema.PATH, null)
             .optional("skip", Integer.class, ArgSchema.INTEGER, 0)
+            .optional("timeout", Integer.class, ArgSchema.INTEGER, 10)
             .optional("debug", Boolean.class, Boolean::parseBoolean, false)
             .build();
     }
@@ -94,11 +96,15 @@ public final class WifiPlugin implements Plugin {
         Path networksPath = requireFile(args.get("networks"), "networks");
         Path passwordsPath = requireFile(args.get("passwords"), "passwords");
         int skip = args.get("skip");
+        int timeoutSeconds = args.get("timeout");
+        if (timeoutSeconds < 1) {
+            throw new IllegalArgumentException("--timeout must be >= 1, got: " + timeoutSeconds);
+        }
 
-        logger.info("Started batch match: networks=%s, passwords=%s, skip=%d, budget=%d"
-            .formatted(networksPath, passwordsPath, skip, parallelismBudget()));
+        logger.info("Started batch match: networks=%s, passwords=%s, skip=%d, budget=%d, timeout=%ds"
+            .formatted(networksPath, passwordsPath, skip, parallelismBudget(), timeoutSeconds));
 
-        NetworkConnector connector = platform.newConnector(shell, logger);
+        NetworkConnector connector = platform.newConnector(shell, logger, Duration.ofSeconds(timeoutSeconds));
         Source<Network> networks = new LinesFileSource(networksPath).map(Network::of);
         Source<String> passwordLines = new LinesFileSource(passwordsPath);
         Source<Password> passwords = () -> passwordLines.stream().skip(skip).map(Password::new);

@@ -25,6 +25,7 @@ mode=2                                   # 1 = scan, 2 = batch match
 networks=/abs/path/to/input/networks.txt
 passwords=/abs/path/to/input/passwords.txt
 skip=0
+timeout=10                               # hard seconds per check; a timed-out check counts as failure
 debug=false
 ```
 

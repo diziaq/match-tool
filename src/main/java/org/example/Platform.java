@@ -46,8 +46,8 @@ public enum Platform {
         return resolve(ScannerProvider.class).create(shell);
     }
 
-    /** Creates a platform-appropriate {@link NetworkConnector} backed by the given shell runner and logger. */
-    public NetworkConnector newConnector(ShellRunner shell, Logger logger) {
-        return new ShellNetworkConnector(shell, this, logger);
+    /** Creates a platform-appropriate {@link NetworkConnector} that bounds each attempt by {@code timeout}. */
+    public NetworkConnector newConnector(ShellRunner shell, Logger logger, java.time.Duration timeout) {
+        return new ShellNetworkConnector(shell, this, logger, timeout);
     }
 }
